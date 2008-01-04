@@ -150,7 +150,7 @@ sub __parseStatement {
 
 sub __parseSimpleStatement {
     my ($self, $statement) = @_;
-    my ($i, $assignment, $operator, $sigil) = (-1, '');
+    my ($i, $assignment, $operator, $sigil) = (-1, '', '', '');
     foreach my $child ($statement->schildren) {
         ++$i;
         next if !$child->parent;

@@ -13,5 +13,6 @@ inc/Module/Install/Share.pm
 inc/Module/Install/Win32.pm
 inc/Module/Install/WriteAll.pm
 lib/IWL/P2JS.pm
+lib/IWL/P2JS/Prototype.pm
 t/p2js.t
 t/Foo.pm
