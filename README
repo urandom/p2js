@@ -1,0 +1,45 @@
+IWL version 0.52
+================
+
+The IWL includes several widgets with which consistent web pages can be built
+quickly. The structure resembles the DOM tree, with the API mimicking
+Javascript very closely.  The widgets themselves can be used either as
+standalone object in an already existing scripts, or can be used to build new
+scripts from the grounds up. They can be finalized in both HTML markup, and
+JSON notation, which can be used for scripts. More advanced widgets like the
+Iconbox come with Javascript files which are automatically included when the
+widget is finalized as HTML.
+
+INSTALLATION
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+In order to actually use the library, the javascript and css files will also
+have to be installed in the server's document root. To do that, the
+'iwl-install' script is provided. It is usually located in '/usr/bin'
+
+DEPENDENCIES
+
+This module requires these other modules and libraries:
+
+  Scalar::Util
+  Locale::Messages
+  Locale::TextDomain
+  HTML::Parser
+
+COPYRIGHT AND LICENCE
+
+Copyright (c) 2006-2007  Viktor Kojouharov. All rights reserved.
+
+This module is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself. See perldoc perlartistic.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
