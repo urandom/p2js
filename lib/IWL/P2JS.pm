@@ -150,36 +150,12 @@ sub __parseStatement {
 
 sub __parseSimpleStatement {
     my ($self, $statement) = @_;
-    my ($i, $assignment, $operator, $sigil) = (-1, '', '', '');
+    my $i = -1;
     foreach my $child ($statement->schildren) {
         ++$i;
         next if !$child->parent;
         if ($child->isa('PPI::Structure::List')) {
-            my $symbols = $child->find('Token::Symbol');
-            if ($symbols) {
-                foreach (@$symbols) {
-                    $sigil = $_->symbol_type;
-                    $self->__parseToken($_);
-                }
-            }
-            if ($assignment || $self->__previousIsMethod($child)) {
-                if ($sigil eq '@') {
-                    $child->{start}->set_content('[');
-                    $child->{finish}->set_content(']');
-                } elsif ($sigil eq '%') {
-                    $child->{start}->set_content('{');
-                    $child->{finish}->set_content('}');
-                    my $operators = $child->find(sub {$_[1]->isa('PPI::Token::Operator') && $_[1] eq ','});
-                    if ($operators) {
-                        for (my $j = 0; $j < @$operators; $j += 2) {
-                            $operators->[$j]->set_content(':');
-                        }
-                    }
-                }
-            } else {
-                $child->{start}->set_content(' ');
-                $child->{finish}->set_content(' ');
-            }
+            $self->__parseStructureList($child);
         } elsif ($child->isa('PPI::Structure::Constructor')) {
             my $token = PPI::Token->new(toJSON($self->__getConstructor($child, 1)));
             $child->insert_before($token) and $child->delete;
@@ -226,17 +202,36 @@ sub __parseSimpleStatement {
             $self->__emitSignal('Token::Word', $child);
             # Method without arguments
             $child->insert_after(PPI::Token->new('()'));
+        } elsif ($child->isa('PPI::Token::Word') && $child->content eq 'function') {
+            # Subroutines
+            my $snext = $child->snext_sibling;
+            if ($snext->isa('PPI::Structure::Block')) {
+                my $first = $snext->schild(0);
+                if ($first->isa('PPI::Statement::Variable')
+                      && $first->schild(1)->isa('PPI::Structure::List')
+                      && $first->schild(2)->isa('PPI::Token::Operator')
+                      && $first->schild(2)->content eq '='
+                      && $first->schild(3)->isa('PPI::Token::Magic')
+                      && $first->schild(3)->content eq '@_'
+                ) {
+                    my $list = $first->schild(1);
+                    $child->insert_after($list->remove);
+                    $first->delete;
+                    $self->__parseStructureList($child->snext_sibling);
+                } else {
+                    $child->insert_after(PPI::Token->new('()'));
+                }
+            }
+        } elsif ($child->isa('PPI::Structure::Block')) {
+            # Subroutine block
+            $self->__parseStatement($_) foreach $child->schildren;
         } elsif ($child->isa('PPI::Token::Quote')
                  && $child->snext_sibling->isa('PPI::Token::Operator')
                  && $child->snext_sibling->content eq '->') {
             $child->set_content($self->__getExpressionValue($child, $child->string));
         } elsif ($child->isa('PPI::Token')) {
             if ($child->isa('PPI::Token::Operator')) {
-                $operator = 1;
-                $assignment = $child->content eq '=';
                 $child->set_content('.') if $child->content eq '->';
-            } elsif ($child->isa('PPI::Token::Symbol')) {
-                $sigil = $child->symbol_type;
             }
             $self->__parseToken($child);
         } elsif ($child->isa('PPI::Structure::Subscript')) {
@@ -294,7 +289,7 @@ sub __parseToken {
         my $name = substr $content, 1;
         my $assignment;
         my $snext = $token;
-        $snext = $token->parent->parent if $token->parent->isa('PPI::Statement::Expression') && $sigil eq '%';
+        $snext = $token->parent->parent if $token->parent->isa('PPI::Statement::Expression') && ($sigil eq '%' || $sigil eq '@');
         while ($snext = $snext->snext_sibling) {
             last if $snext->isa('PPI::Token::Symbol') && !$snext->sprevious_sibling->isa('PPI::Token::Operator');
             if ($snext->isa('PPI::Token::Operator') && $snext->content eq '=') {
@@ -327,7 +322,7 @@ sub __parseForLoop {
     return unless $child;
     my $statement = $child->parent;
     if ($child->schildren == 1) {
-        my $s = ($child->children)[0];
+        my $s = $child->schild(0);
         my $operator = $s->find_first('Token::Operator');
         my $elements = $s->find(
             sub {
@@ -373,6 +368,40 @@ sub __parseForLoop {
     }
 }
 
+sub __parseStructureList {
+    my ($self, $child) = @_;
+    my $sprev   = $child->sprevious_sibling;
+
+    $self->__parseToken($_) foreach $child->schild(0)->schildren;
+    
+    if ($sprev->isa('PPI::Token::Word') && $sprev->content eq 'var') {
+        my $whitespace = PPI::Token::Whitespace->new;
+        $whitespace->set_content(' ');
+        $child->insert_before($whitespace);
+        $child->insert_before($child->schild(0)->schild(0)->remove);
+        $child->delete;
+    } else {
+        if ($sprev->isa('PPI::Token::Operator') && $sprev->content eq '=') {
+            my $symbol = $sprev->sprevious_sibling;
+            if ($symbol->isa('PPI::Token::Symbol')) {
+                if ($self->{__currentDocument}{__variables}{$symbol->content} eq '@') {
+                    $child->{start}->set_content('[');
+                    $child->{finish}->set_content(']');
+                } elsif ($self->{__currentDocument}{__variables}{$symbol->content} eq '%') {
+                    $child->{start}->set_content('{');
+                    $child->{finish}->set_content('}');
+                    my $operators = $child->find(sub {$_[1]->isa('PPI::Token::Operator') && $_[1] eq ','});
+                    if ($operators) {
+                        for (my $j = 0; $j < @$operators; $j += 2) {
+                            $operators->[$j]->set_content(':');
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 # Checks whether the element's previous sibling is a method/function
 sub __previousIsMethod {
     my ($self, $element) = @_;
@@ -408,11 +437,11 @@ sub __getExpressionValue {
                 $string = 1;
             }
         } elsif ($start->isa('PPI::Structure::Subscript') && $start->start->content eq '{') {
-            my $property = ($start->children)[0]->content;
+            my $property = $start->schild(0)->content;
             $property =~ s/^'// and $property =~ s/'$//;
             $ret = $ret->{$property};
         } elsif ($start->isa('PPI::Structure::Subscript') && $start->start->content eq '[') {
-            my $property = ($start->children)[0]->content;
+            my $property = $start->schild(0)->content;
             $ret = $ret->[$property];
         } else {
             last;
@@ -434,7 +463,7 @@ sub __getFunctionValue {
 sub __getArguments {
     my ($self, $list, $keep_strings) = @_;
     return () unless $list->isa('PPI::Structure::List');
-    my ($element, @args) = $list->children ? ((($list->children)[0])->children)[0] : ();
+    my ($element, @args) = $list->children ? $list->schild(0)->schild(0) : ();
     $list->delete and return () unless $element;
 
     $ignore_json = 1;
@@ -461,7 +490,7 @@ sub __getArguments {
 sub __getConstructor {
     my ($self, $constructor, $skip) = @_;
     return unless $constructor->isa('PPI::Structure::Constructor');
-    my ($element, @args) = $constructor->children ? ((($constructor->children)[0])->children)[0] : ();
+    my ($element, @args) = $constructor->children ? $constructor->schild(0)->schild(0) : ();
     my ($hash, $odd) = ($constructor->start->content eq '{', 1);
     ($skip || $constructor->delete) and return $hash ? {} : [] unless $element;
 

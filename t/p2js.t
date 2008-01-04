@@ -1,4 +1,4 @@
-use Test::More tests => 52;
+use Test::More tests => 54;
 
 BEGIN { use_ok('IWL::P2JS'); use_ok('IWL::P2JS::Prototype'); push @INC, "./t"; }
 use Foo;
@@ -26,7 +26,7 @@ sub test_general {
     is($p->convert(sub {my $a = 12; alert($a)}), "var a = 12;alert(a);");
     is($p->convert(sub {my $a = 12; Math::max($a, 5)}), "var a = 12;Math.max(a, 5);");
     is($p->convert(sub {my $url = 'foo.pl'; my $ajax = Ajax::Request->new($url, {parameters => {a => 1}, array => [1, 'foo']}); $ajax->abort}), q|var url = 'foo.pl';var ajax = new Ajax.Request(url, {"parameters": {"a": 1}, "array": [1, "foo"]});ajax.abort();|);
-    is($p->convert(sub {my $foo = document->getElementById('foo')->down()->next(2)->down('.class'); $foo->remove();}), q|var foo = document.getElementById('foo').down().next(2).down('.class');foo.remove();|);
+    is($p->convert(sub {my $foo = "document"->getElementById('foo')->down()->next(2)->down('.class'); $foo->remove();}), q|var foo = document.getElementById('foo').down().next(2).down('.class');foo.remove();|);
     is($p->convert(sub {my $foo = document::getElementById('foo')->down()->next(2)->down('.class'); $foo->remove();}), q|var foo = document.getElementById('foo').down().next(2).down('.class');foo.remove();|);
     is($p->convert(sub {S('foo')->down}), q|$('foo').down();|);
     is($p->convert(sub {SS('#foo')->down}), q|$$('#foo').down();|);
@@ -39,6 +39,9 @@ sub test_general {
     is($p->convert(sub {my $a = 12; for (1 .. 100) {my $b = $a / 2}}), "var a = 12;for (var _ = 1; _ < 101; ++_) {var b = a / 2;}");
     is($p->convert(sub {my $a = 12; for (1,6,21,4) {my $b = $a / 2}}), q|var a = 12;var _$ = [1,6,21,4];for (var i = 0, _ = _$[0]; i < _$.length; _ = _$[++i]) {var b = a / 2;}delete _$;|);
     is($p->convert(sub {my %a = (a => 1, b => 2); for (keys %a) {my $b = $a{$_}}}), q|var a = {'a': 1, 'b': 2};for (var _ in a) {var b = a[_];}|);
+
+    is($p->convert(sub {my $a = sub {return 1}}), q|var a = function() {return 1;};|);
+    is($p->convert(sub {my $a = sub {my ($b, $c, $d) = @_; return 1}}), q|var a = function(b, c, d) {return 1;};|);
 }
 
 sub test_lexical {
