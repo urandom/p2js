@@ -232,6 +232,8 @@ sub __parseSimpleStatement {
         } elsif ($child->isa('PPI::Token')) {
             if ($child->isa('PPI::Token::Operator')) {
                 $child->set_content('.') if $child->content eq '->';
+            } elsif ($child->isa('PPI::Token::Structure') && $child->content eq ';') {
+                $child->previous_sibling->remove while $child->previous_sibling->isa('PPI::Token::Whitespace');
             }
             $self->__parseToken($child);
         } elsif ($child->isa('PPI::Structure::Subscript')) {
@@ -370,16 +372,46 @@ sub __parseForLoop {
 
 sub __parseStructureList {
     my ($self, $child) = @_;
-    my $sprev   = $child->sprevious_sibling;
+    my $sprev    = $child->sprevious_sibling;
+    my @children = $child->schild(0)->schildren;
 
-    $self->__parseToken($_) foreach $child->schild(0)->schildren;
+    $self->__parseToken($_) foreach @children;
     
     if ($sprev->isa('PPI::Token::Word') && $sprev->content eq 'var') {
         my $whitespace = PPI::Token::Whitespace->new;
         $whitespace->set_content(' ');
-        $child->insert_before($whitespace);
-        $child->insert_before($child->schild(0)->schild(0)->remove);
-        $child->delete;
+        if (@children == 1) {
+            $child->insert_before($whitespace);
+            $child->insert_before($children[0]->remove);
+            $child->delete;
+        } elsif (@children > 1) {
+            my $var = $sprev->clone;
+            my $coma = PPI::Token::Operator->new(', ');
+            my @tokens = map {$_->clone} grep {$_->isa('PPI::Token::Symbol')} @children;
+            my ($token, @rhs);
+            if ($child->snext_sibling->isa('PPI::Token::Operator') && $child->snext_sibling->snext_sibling->isa('PPI::Structure::List')) {
+                $token = $child->snext_sibling->remove;
+                @rhs = grep {!$_->isa('PPI::Token::Operator')} $child->snext_sibling->remove->schild(0)->schildren;
+
+                $self->__parseToken($_) foreach @rhs;
+            }
+
+            while(@tokens) {
+                $child->insert_before($var->clone);
+                $child->insert_before($whitespace->clone);
+                $child->insert_before(shift @tokens);
+                if (@rhs) {
+                    $child->insert_before($whitespace->clone);
+                    $child->insert_before($token->clone);
+                    $child->insert_before($whitespace->clone);
+                    $child->insert_before(shift @rhs);
+                }
+                $child->insert_before($coma->clone) if @tokens;
+            }
+
+            $sprev->delete;
+            $child->delete;
+        }
     } else {
         if ($sprev->isa('PPI::Token::Operator') && $sprev->content eq '=') {
             my $symbol = $sprev->sprevious_sibling;
