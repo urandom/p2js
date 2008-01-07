@@ -236,15 +236,6 @@ sub __parseSimpleStatement {
                 $child->previous_sibling->remove while $child->previous_sibling->isa('PPI::Token::Whitespace');
             }
             $self->__parseToken($child);
-        } elsif ($child->isa('PPI::Structure::Subscript')) {
-            my $prev = $child->sprevious_sibling;
-            next unless $prev;
-            if ($prev->isa('PPI::Token::Symbol')
-                  && $self->{__currentDocument}{__variables}{$prev} eq '%') {
-                $child->start->set_content('[');
-                $child->finish->set_content(']');
-                $self->__parseToken($_) foreach @{$child->find('Token')};
-            }
         }
     }
 }
@@ -290,13 +281,15 @@ sub __parseToken {
         my $content = $token->content;
         my $name = substr $content, 1;
         my $assignment;
-        my $snext = $token;
-        $snext = $token->parent->parent if $token->parent->isa('PPI::Statement::Expression') && ($sigil eq '%' || $sigil eq '@');
-        while ($snext = $snext->snext_sibling) {
-            last if $snext->isa('PPI::Token::Symbol') && !$snext->sprevious_sibling->isa('PPI::Token::Operator');
-            if ($snext->isa('PPI::Token::Operator') && $snext->content eq '=') {
-                $assignment = 1;
-                last;
+        my $snext = $token->snext_sibling;
+        unless ($snext && (($snext->isa('PPI::Token::Operator') && $snext->content eq '->') || $snext->isa('PPI::Structure::Subscript'))) {
+            $snext = $token->parent->isa('PPI::Statement::Expression') && ($sigil eq '%' || $sigil eq '@') ? $token->parent->parent : $token;
+            while ($snext = $snext->snext_sibling) {
+                last if $snext->isa('PPI::Token::Symbol') && !$snext->sprevious_sibling->isa('PPI::Token::Operator');
+                if ($snext->isa('PPI::Token::Operator') && $snext->content eq '=') {
+                    $assignment = 1;
+                    last;
+                }
             }
         }
         if ($assignment) {
@@ -306,13 +299,16 @@ sub __parseToken {
             my $pad_value = $self->{__pad}{$token->content}
               ? do {
                     my $value = $self->{__pad}{$token->content}{value};
+                    $token->{__value} = 1;
                     if (ref $value eq 'REF' && blessed $$value) {
                         $self->__getExpressionValue($token, $$value);
                     } else {
                         toJSON($value)
                     }
                 }
-              : $name;
+              : $token->snext_sibling && $token->snext_sibling->isa('PPI::Structure::Subscript')
+                ? $self->__getObjectExpression($token, $name)
+                : $name;
             $token->set_content($pad_value);
         }
     }
@@ -373,7 +369,7 @@ sub __parseForLoop {
 sub __parseStructureList {
     my ($self, $child) = @_;
     my $sprev    = $child->sprevious_sibling;
-    my @children = $child->schild(0)->schildren;
+    my @children = $child->children ? $child->schild(0)->schildren : ();
 
     $self->__parseToken($_) foreach @children;
     
@@ -469,9 +465,9 @@ sub __getExpressionValue {
                 $string = 1;
             }
         } elsif ($start->isa('PPI::Structure::Subscript') && $start->start->content eq '{') {
-            my $property = $start->schild(0)->content;
-            $property =~ s/^'// and $property =~ s/'$//;
-            $ret = $ret->{$property};
+            my $property = $start->schild(0);
+            $property = $property->schild(0) if $property->isa('PPI::Statement');
+            $ret = $ret->{$property->can('string') ? $property->string : $property->content};
         } elsif ($start->isa('PPI::Structure::Subscript') && $start->start->content eq '[') {
             my $property = $start->schild(0)->content;
             $ret = $ret->[$property];
@@ -481,6 +477,46 @@ sub __getExpressionValue {
         $start = $start->snext_sibling;
     }
     return $string ? $ret : toJSON($ret);
+}
+
+# Convert perl object interaction into javascript object interaction
+sub __getObjectExpression {
+    my ($self, $element, $value) = @_;
+    my ($start, $ret, $sprev, $operator) = ($element->snext_sibling, $value, $element->sprevious_sibling, 0);
+
+    $sprev->delete if $sprev && $sprev->isa('PPI::Token::Cast') && $sprev->content eq '$';
+    while (1) {
+        $sprev = $start->sprevious_sibling;
+        $sprev->delete unless $sprev == $element;
+        if ($start->isa('PPI::Token::Operator') && $start->content eq '->') {
+            $start = $start->snext_sibling and next;
+        } elsif ($start->isa('PPI::Token::Word') && $sprev->isa('PPI::Token::Operator')) {
+            my $method = $start->content;
+            my @args = $self->__getArguments($start->snext_sibling, 1);
+            $ret = join '.', split '::', $ret;
+            $ret = ($method eq 'new' ? ('new ' . $ret) : ($ret . '.' . $method))
+              . '(' . (join ', ', map {
+                ref $_ ? toJSON($_) : $_
+              } @args) . ')';
+        } elsif ($start->isa('PPI::Structure::Subscript') && $start->start->content eq '{') {
+            my $property = $start->schild(0);
+            $property = $property->schild(0) if $property->isa('PPI::Statement');
+            $self->__parseToken($property);
+            if (($property->isa('PPI::Token::Symbol') && $property->{__value})
+                  || $property->isa('PPI::Token::Quote')) {
+                $ret = $ret . '.' . ($property->can('string') ? $property->string : $property->content);
+            } else {
+                $ret = $ret . '[' . $property->content . ']';
+            }
+        } elsif ($start->isa('PPI::Structure::Subscript') && $start->start->content eq '[') {
+            my $property = $start->schild(0)->content;
+            $ret = $ret->[$property];
+        } else {
+            last;
+        }
+        $start = $start->snext_sibling;
+    }
+    return $ret;
 }
 
 # Returns a perl function value (foo() or Foo::bar())

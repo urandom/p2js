@@ -1,4 +1,4 @@
-use Test::More tests => 55;
+use Test::More tests => 56;
 
 BEGIN { use_ok('IWL::P2JS'); use_ok('IWL::P2JS::Prototype'); push @INC, "./t"; }
 use Foo;
@@ -77,5 +77,13 @@ sub test_lexical {
     is($p->convert(sub {while ($a) { my $v = $b}}), 'while (42) {var v = "foo";}');
 }
 
+sub test_real {
+    is($p->convert(sub {
+        my $content = S('content')->down();
+        $params->{codeFor} = $content->{id} if $content;
+    }), q|var content = $('content').down();if ( content) params.codeFor = content.id;|);
+}
+
 test_general;
 test_lexical;
+test_real;
