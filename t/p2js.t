@@ -1,4 +1,4 @@
-use Test::More tests => 56;
+use Test::More tests => 61;
 
 BEGIN { use_ok('IWL::P2JS'); use_ok('IWL::P2JS::Prototype'); push @INC, "./t"; }
 use Foo;
@@ -82,6 +82,12 @@ sub test_real {
         my $content = S('content')->down();
         $params->{codeFor} = $content->{id} if $content;
     }), q|var content = $('content').down();if ( content) params.codeFor = content.id;|);
+    is($p->convert(sub {IWL::Status::display('Stock button loaded')}), "IWL.Status.display('Stock button loaded');");
+    is($p->convert(sub {IWL::Status::display->bind($this, 'Completed')}), "IWL.Status.display.bind(this, 'Completed');");
+    is($p->convert(sub {{text => SF('image_entry_text') || 0}}), q{{"text": $F('image_entry_text') || 0}});
+    my $message = "five";
+    is($p->convert(sub {IWL::Status::display("Icon $message was selected")}), "IWL.Status.display('Icon ' + \"five\" + ' was selected');");
+    is($p->convert(sub {IWL::Status::display("Don't panic")}), "IWL.Status.display('Don\'t panic');");
 }
 
 test_general;
