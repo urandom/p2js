@@ -87,7 +87,7 @@ sub test_real {
     is($p->convert(sub {{text => SF('image_entry_text') || 0}}), q{{"text": $F('image_entry_text') || 0}});
     my $message = "five";
     is($p->convert(sub {IWL::Status::display("Icon $message was selected")}), "IWL.Status.display('Icon ' + \"five\" + ' was selected');");
-    is($p->convert(sub {IWL::Status::display("Don't panic")}), "IWL.Status.display('Don\'t panic');");
+    is($p->convert(sub {IWL::Status::display("Don't panic")}), "IWL.Status.display('Don\\'t panic');");
 }
 
 test_general;

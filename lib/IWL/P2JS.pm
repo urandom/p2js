@@ -124,6 +124,13 @@ sub __parser {
             $token->set_content('for')      if $token->content eq 'foreach';
             $token->set_content('else if')  if $token->content eq 'elsif';
             $token->set_content('function') if $token->content eq 'sub';
+        } elsif ($token->isa('PPI::Token::Quote::Literal')) {
+            my $quote = PPI::Token::Quote::Single->new("'");
+            my $string = $token->string;
+            $string =~ s/(?<!\\)'/\\'/g;
+            $quote->set_content("'" . $string . "'");
+            $token->insert_before($quote);
+            $token->delete;
         }
 
         return '';
