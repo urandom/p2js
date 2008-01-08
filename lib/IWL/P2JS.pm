@@ -269,7 +269,9 @@ sub __parseTokenSymbol {
                     $self->__toJS($value)
                 }
             }
-          : $token->snext_sibling && $token->snext_sibling->isa('PPI::Structure::Subscript')
+          : $token->snext_sibling &&
+            ($token->snext_sibling->isa('PPI::Structure::Subscript')
+                || ($token->snext_sibling->isa('PPI::Token::Operator') && $token->snext_sibling->content eq '->'))
             ? $self->__getObjectExpression($token, $name)
             : $name;
         $token->set_content($pad_value);
@@ -504,7 +506,7 @@ sub __getExpressionValue {
         } else {
             last;
         }
-        $start = $start->snext_sibling;
+        $start->snext_sibling ? $start = $start->snext_sibling : ($start->delete and last);
     }
     return $string ? $ret : $self->__toJS($ret);
 }
@@ -541,11 +543,11 @@ sub __getObjectExpression {
             }
         } elsif ($start->isa('PPI::Structure::Subscript') && $start->start->content eq '[') {
             my $property = $start->schild(0)->content;
-            $ret = $ret->[$property];
+            $ret = $ret . '[' . $property . ']';
         } else {
             last;
         }
-        $start = $start->snext_sibling;
+        $start->snext_sibling ? $start = $start->snext_sibling : ($start->delete and last);
     }
     return $ret;
 }

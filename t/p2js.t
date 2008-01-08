@@ -1,4 +1,4 @@
-use Test::More tests => 61;
+use Test::More tests => 64;
 
 BEGIN { use_ok('IWL::P2JS'); use_ok('IWL::P2JS::Prototype'); push @INC, "./t"; }
 use Foo;
@@ -88,6 +88,9 @@ sub test_real {
     my $message = "five";
     is($p->convert(sub {IWL::Status::display("Icon $message was selected")}), "IWL.Status.display('Icon ' + \"five\" + ' was selected');");
     is($p->convert(sub {IWL::Status::display("Don't panic")}), "IWL.Status.display('Don\\'t panic');");
+    is($p->convert(sub {S($this)->isPulsating ? $this->setPulsate(0) : $this->setPulsate(1)}), '$(this).isPulsating() ? this.setPulsate(0) : this.setPulsate(1);');
+    is($p->convert(sub {IWL::Status::display($this->getLabel . ' selected.')}), "IWL.Status.display(this.getLabel() + ' selected.');");
+    is($p->convert(sub {IWL::Status::display($arguments->[0]{data}{text})}), "IWL.Status.display(arguments[0].data.text);");
 }
 
 test_general;
