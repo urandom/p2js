@@ -14,7 +14,7 @@ sub test_general {
     is($p->convert(sub {my $a = [1,2,3]}), "var a = [1, 2, 3];");
     is($p->convert(sub {my %a = (a => 1)}), "var a = {'a': 1};");
     is($p->convert(sub {my $a = {a => 1}}), 'var a = {"a": 1};');
-    is($p->convert(sub {my ($a, $b) = (a => 1)}), "var a = 'a', var b = 1;");
+    is($p->convert(sub {my ($a, $b) = (a => 1)}), "var a = 'a', b = 1;");
 
     is($p->convert(sub {my $a = 12; my $b = $a ? 42 : ''}), "var a = 12;var b = a ? 42 : '';");
     is($p->convert(sub {my $a = 12; my $b = 42 if $a}), "var a = 12;if ( a) var b = 42;");

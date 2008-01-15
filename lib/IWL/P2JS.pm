@@ -413,7 +413,6 @@ sub __parseStructureList {
             $child->insert_before($children[0]->remove);
             $child->delete;
         } elsif (@children > 1) {
-            my $var = $sprev->clone;
             my $coma = PPI::Token::Operator->new(', ');
             my @tokens = map {$_->clone} grep {$_->isa('PPI::Token::Symbol')} @children;
             my ($token, @rhs);
@@ -425,7 +424,6 @@ sub __parseStructureList {
             }
 
             while(@tokens) {
-                $child->insert_before($var->clone);
                 $child->insert_before($whitespace->clone);
                 $child->insert_before(shift @tokens);
                 if (@rhs) {
@@ -437,7 +435,6 @@ sub __parseStructureList {
                 $child->insert_before($coma->clone) if @tokens;
             }
 
-            $sprev->delete;
             $child->delete;
         }
     } else {
