@@ -281,7 +281,7 @@ sub __parseTokenSymbol {
 
 sub __parseWord {
     my ($self, $child) = @_;
-    return unless $child->isa('PPI::Token::Word');
+    return unless $child && $child->isa('PPI::Token::Word');
     if ({if => 1, unless => 1, while => 1, until => 1, foreach => 1, for => 1}->{$child->content}) {
         # Statement modifiers
         my $brace = PPI::Token->new;
@@ -304,7 +304,7 @@ sub __parseWord {
         $brace->set_content($forloop ? ' ' : $modifier . ') ');
         push @elements, $brace;
         $first->insert_before($_->remove) foreach @elements;
-    } elsif ($child->content ne 'var' && $child->snext_sibling->isa('PPI::Structure::List')) {
+    } elsif ($child->content ne 'var' && $child->snext_sibling && $child->snext_sibling->isa('PPI::Structure::List')) {
         $self->__emitSignal('Token::Word', $child);
         # Functions
         my @composition = split /::/, $child->content;
@@ -343,6 +343,7 @@ sub __parseWord {
             } else {
                 $child->insert_after(PPI::Token->new('()'));
             }
+            $self->__parseStatement($_) foreach $snext->children;
         }
     }
 }
@@ -403,7 +404,10 @@ sub __parseStructureList {
     my $sprev    = $child->sprevious_sibling;
     my @children = $child->children ? $child->schild(0)->schildren : ();
 
-    $self->__parseTokenSymbol($_) foreach @children;
+    do {
+        $self->__parseTokenSymbol($_);
+        $self->__parseWord($_);
+    } foreach @children;
     
     if ($sprev->isa('PPI::Token::Word') && $sprev->content eq 'var') {
         my $whitespace = PPI::Token::Whitespace->new;

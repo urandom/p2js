@@ -1,10 +1,9 @@
 use Test::More tests => 65;
 
-BEGIN { use_ok('IWL::P2JS'); use_ok('IWL::P2JS::Prototype'); push @INC, "./t"; }
+BEGIN { use_ok('IWL::P2JS'); push @INC, "./t"; }
 use Foo;
 
 my $p = IWL::P2JS->new;
-IWL::P2JS::Prototype->new($p);
 
 sub test_general {
     is($p->convert(sub {}), '');
@@ -94,8 +93,7 @@ sub test_real {
     my $container = Foo->new;
     is($p->convert(sub {my $container = S('main_container')->positionAtCenter;$container->setStyle({visibility => 'visible', display => 'none'});$container->appear->shake;}),
         q|var container = $('main_container').positionAtCenter();container.setStyle({"visibility": "visible", "display": "none"});container.appear().shake();|);
-        
-    
+    is($p->convert(sub {document::signalConnect('dom:ready' => sub { S('main_container')->hide })}), q|document.signalConnect('dom:ready', function() {$('main_container').hide();});|);
 }
 
 test_general;
