@@ -9,6 +9,8 @@ use B::Deparse;
 use PPI::Document;
 use Scalar::Util qw(blessed);
 
+use IWL::Config '%IWLConfig';
+
 use vars qw($VERSION);
 
 my $ignore_json = 0;
@@ -26,6 +28,10 @@ IWL::P2JS - a basic Perl to JavaScript converter
 
 IWL::P2JS is a class, which provides methods for converting perl subroutines into javascript code. This is a VERY experimental module, whose goal is to provide a way for developers to use Perl code in IWL signal handlers.
 
+=head1 PLUGINS
+
+IWL::P2JS has basic plugin support. To load a plugin, it must be added to the I<P2JS_PLUGINS> L<IWL::Config> variable. I<P2JS_PLUGINS> is a comma (I<,>) separated list of classes, which will be loaded, and their constructors will be invoked. If the variable doesn't exist, L<IWL::P2JS::Prototype> is loaded by default.
+
 =head1 CONSTRUCTOR
 
 IWL::P2JS->new
@@ -38,6 +44,9 @@ sub new {
     my $self = bless {}, $class;
 
     $self->{__deparser} = B::Deparse->new("-sC", "-q");
+
+    $IWLConfig{P2JS_PLUGINS} = 'IWL::P2JS::Prototype' unless $IWLConfig{P2JS_PLUGINS};
+    do { eval "require $_"; $_->new($self) } foreach split ',', $IWLConfig{P2JS_PLUGINS};
 
     return $self;
 }
