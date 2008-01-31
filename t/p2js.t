@@ -1,4 +1,4 @@
-use Test::More tests => 64;
+use Test::More tests => 65;
 
 BEGIN { use_ok('IWL::P2JS'); use_ok('IWL::P2JS::Prototype'); push @INC, "./t"; }
 use Foo;
@@ -91,6 +91,11 @@ sub test_real {
     is($p->convert(sub {S($this)->isPulsating ? $this->setPulsate(0) : $this->setPulsate(1)}), '$(this).isPulsating() ? this.setPulsate(0) : this.setPulsate(1);');
     is($p->convert(sub {IWL::Status::display($this->getLabel . ' selected.')}), "IWL.Status.display(this.getLabel() + ' selected.');");
     is($p->convert(sub {IWL::Status::display($arguments->[0]{data}{text})}), "IWL.Status.display(arguments[0].data.text);");
+    my $container = Foo->new;
+    is($p->convert(sub {my $container = S('main_container')->positionAtCenter;$container->setStyle({visibility => 'visible', display => 'none'});$container->appear->shake;}),
+        q|var container = $('main_container').positionAtCenter();container.setStyle({"visibility": "visible", "display": "none"});container.appear().shake();|);
+        
+    
 }
 
 test_general;

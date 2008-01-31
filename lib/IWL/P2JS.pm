@@ -259,7 +259,7 @@ sub __parseTokenSymbol {
         $self->{__currentDocument}{__variables}{$name} = $sigil;
         $token->set_content($name);
     } else {
-        my $pad_value = $self->{__pad}{$token->content}
+        my $pad_value = !$self->{__currentDocument}{__variables}{$name} && $self->{__pad}{$token->content}
           ? do {
                 my $value = $self->{__pad}{$token->content}{value};
                 $token->{__value} = 1;
@@ -572,7 +572,7 @@ sub __getArguments {
             push @args, $element->content;
         } elsif ($element->isa('PPI::Token::Quote')) {
             push @args, $keep_strings ? $element->content : $element->string;
-        } elsif ($element->isa('PPI::Structure::Constructor')) {
+        } elsif ($element->isa('PPI::Structure::Constructor') || $element->isa('PPI::Structure::Block')) {
             push @args, $self->__getConstructor($element);
         } else {
             push @args, $element->content;
@@ -587,7 +587,7 @@ sub __getArguments {
 # Returns the contents of an anonymous hash/array
 sub __getConstructor {
     my ($self, $constructor, $preserve) = @_;
-    return unless defined $constructor && $constructor->isa('PPI::Structure::Constructor');
+    return unless defined $constructor && ($constructor->isa('PPI::Structure::Constructor') || $constructor->isa('PPI::Structure::Block'));
     my ($element, @args) = $constructor->children ? $constructor->schild(0)->schild(0) : ();
     my ($hash, $add) = ($constructor->start->content eq '{', 0);
     ($preserve || $constructor->delete) and return $hash ? {} : [] unless $element;
