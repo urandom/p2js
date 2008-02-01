@@ -1,4 +1,4 @@
-use Test::More tests => 65;
+use Test::More tests => 66;
 
 BEGIN { use_ok('IWL::P2JS'); push @INC, "./t"; }
 use Foo;
@@ -96,6 +96,12 @@ sub test_real {
     is($p->convert(sub {document::signalConnect('dom:ready' => sub { S('main_container')->hide })}), q|document.signalConnect('dom:ready', function() {$('main_container').hide();});|);
 }
 
+sub test_overrides {
+    require IWL::Script;
+    like(IWL::Script->new->setScript(sub {return 1})->getContent, qr|<script .*?>return 1;</script>|);
+}
+
 test_general;
 test_lexical;
 test_real;
+test_overrides;

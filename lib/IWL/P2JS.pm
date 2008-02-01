@@ -12,10 +12,10 @@ use base qw(Exporter);
 
 use IWL::Config '%IWLConfig';
 
-use vars qw($VERSION $this @EXPORT);
+use vars qw($VERSION @EXPORT $this $arguments);
 
 # export $this for JavaScript
-@EXPORT = qw($this);
+@EXPORT = qw($this $arguments);
 
 my $ignore_json = 0;
 my $number  = qr/^-?\d+(?:\.\d+)?(?:e[-+]\d+)?$/;
@@ -34,7 +34,7 @@ IWL::P2JS is a class, which provides methods for converting perl subroutines int
 
 =head1 PLUGINS
 
-IWL::P2JS has basic plugin support. To load a plugin, it must be added to the I<P2JS_PLUGINS> L<IWL::Config> variable. I<P2JS_PLUGINS> is a comma (I<,>) separated list of classes, which will be loaded, and their constructors will be invoked. If the variable doesn't exist, L<IWL::P2JS::Prototype> is loaded by default.
+IWL::P2JS has basic plugin support. To load a plugin, it must be added to the I<P2JS_PLUGINS> L<IWL::Config> variable. I<P2JS_PLUGINS> is a comma (I<,>) separated list of classes, which will be loaded, and their constructors will be invoked. If the variable doesn't exist, it is set to the following: L<IWL::P2JS::Prototype>,L<IWL::P2JS::IWL>
 
 =head1 CONSTRUCTOR
 
@@ -49,8 +49,8 @@ sub new {
 
     $self->{__deparser} = B::Deparse->new("-sC", "-q");
 
-    $IWLConfig{P2JS_PLUGINS} = 'IWL::P2JS::Prototype' unless $IWLConfig{P2JS_PLUGINS};
-    do { eval "require $_"; $_->new($self) } foreach split ',', $IWLConfig{P2JS_PLUGINS};
+    $IWLConfig{P2JS_PLUGINS} = 'IWL::P2JS::Prototype,IWL::P2JS::IWL' unless $IWLConfig{P2JS_PLUGINS};
+    do { eval "require $_"; $_->new($self) unless $@ } foreach split ',', $IWLConfig{P2JS_PLUGINS};
 
     return $self;
 }
