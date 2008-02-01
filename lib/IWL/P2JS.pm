@@ -8,10 +8,14 @@ use strict;
 use B::Deparse;
 use PPI::Document;
 use Scalar::Util qw(blessed);
+use base qw(Exporter);
 
 use IWL::Config '%IWLConfig';
 
-use vars qw($VERSION);
+use vars qw($VERSION $this @EXPORT);
+
+# export $this for JavaScript
+@EXPORT = qw($this);
 
 my $ignore_json = 0;
 my $number  = qr/^-?\d+(?:\.\d+)?(?:e[-+]\d+)?$/;
