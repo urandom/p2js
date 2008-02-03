@@ -7,6 +7,7 @@ use strict;
 
 use B::Deparse;
 use PPI::Document;
+use Text::Balanced 'extract_bracketed';
 use Scalar::Util qw(blessed);
 use base qw(Exporter);
 
@@ -367,32 +368,30 @@ sub __parseForLoop {
     if ($child->schildren == 1) {
         my $s = $child->schild(0);
         my $operator = $s->find_first('Token::Operator');
-        my $elements = $s->find(
-            sub {
-                return 1 if $_[1]->isa('PPI::Token::Number');
-                $self->__parseTokenSymbol($_[1]) and return 1 if ($_[1]->isa('PPI::Token::Symbol'));
-            }
-        );
         my $content = PPI::Token->new;
+        $operator = $operator ? $operator->content : '';
+        $self->__parseStatement($s);
+        my $expr = $s->content;
 
-        if ($operator && $operator->content eq '..') {
+        if ($operator eq '..') {
             # Range
+            my @elements = split ' .. ', $expr;
             $content->set_content(
-                'var _ = ' . $elements->[0]->content . '; _ < ' . ($elements->[1]->content + 1) . '; ++_'
+                'var _ = ' . $elements[0] . '; _ < ' . ($elements[1] + 1) . '; ++_'
             );
             $_->delete foreach $s->children;
             $s->add_element($content);
         } elsif (!$operator && $s->first_element->isa('PPI::Token::Word') && $s->first_element->content eq 'keys') {
             $s->first_element->set_content('var _ in');
-        } elsif (($operator && $operator->content eq ',') || $elements->[0]->isa('PPI::Token::Symbol')) {
+        } else {
             # Array
             my $array = PPI::Token->new;
             my $st = PPI::Statement->new;
-            $array->set_content(
-                $operator
-                  ? 'var _$ = [' . join(',', map {$_->content} @$elements) . '];'
-                  : 'var _$ = ' . $elements->[0]->content . ';'
-            );
+
+            # For statement-modifier for-loop
+            $expr = '[' . $expr . ']' if (extract_bracketed($expr, '[]'))[1];
+
+            $array->set_content('var _$ = ' . $expr . ';');
             $st->add_element($array);
             $statement->insert_before($st);
             $content->set_content(

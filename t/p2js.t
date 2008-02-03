@@ -1,4 +1,4 @@
-use Test::More tests => 70;
+use Test::More tests => 73;
 
 BEGIN { use_ok('IWL::P2JS'); push @INC, "./t"; }
 use Foo;
@@ -38,7 +38,8 @@ sub test_general {
     is($p->convert(sub {my $a = 12; until ($a) {my $b = $a / 2}}), "var a = 12;while (!(a)) {var b = a / 2;}");
     is($p->convert(sub {my $a = 12; for (my $i = 0; $i < 100; ++$i) {my $b = $a / 2}}), "var a = 12;for (var i = 0; i < 100; ++i) {var b = a / 2;}");
     is($p->convert(sub {my $a = 12; for (1 .. 100) {my $b = $a / 2}}), "var a = 12;for (var _ = 1; _ < 101; ++_) {var b = a / 2;}");
-    is($p->convert(sub {my $a = 12; for (1,6,21,4) {my $b = $a / 2}}), q|var a = 12;var _$ = [1,6,21,4];for (var i = 0, _ = _$[0]; i < _$.length; _ = _$[++i]) {var b = a / 2;}delete _$;|);
+    is($p->convert(sub {my $a = 12; for (1,6,21,4) {my $b = $a / 2}}), q|var a = 12;var _$ = [1, 6, 21, 4];for (var i = 0, _ = _$[0]; i < _$.length; _ = _$[++i]) {var b = a / 2;}delete _$;|);
+    is($p->convert(sub {for (['perl', 10], ['module', 20]) {my $b = $_->[0] . $_->[1]}}), q|var _$ = [["perl", 10], ["module", 20]];for (var i = 0, _ = _$[0]; i < _$.length; _ = _$[++i]) {var b = _[0] + _[1];}delete _$;|);
     is($p->convert(sub {my %a = (a => 1, b => 2); for (keys %a) {my $b = $a{$_}}}), q|var a = {'a': 1, 'b': 2};for (var _ in a) {var b = a[_];}|);
 
     is($p->convert(sub {my $a = sub {return 1}}), q|var a = function() {return 1;};|);
@@ -53,6 +54,7 @@ sub test_lexical {
     my $e = [7,8,9];
     my $f = {c => $b , d => $e};
     my $g = Foo->new;
+    my @h = ([1, 2], [3, 4]);
 
     is($p->convert(sub {my $v = $a}), 'var v = 42;');
     is($p->convert(sub {my $v = $b}), 'var v = "foo";');
@@ -75,6 +77,8 @@ sub test_lexical {
     is($p->convert(sub {my $v = Foo->printArgs($a, $b, 'abs')}), 'var v = "42, foo, abs";');
     is($p->convert(sub {my $v = $_ foreach 1 .. $a}), 'for (var _ = 1; _ < 43; ++_) var v = _;');
     is($p->convert(sub {my $v = $_ foreach @c}), 'var _$ = [1, 2, 3];for (var i = 0, _ = _$[0]; i < _$.length; _ = _$[++i]) var v = _;delete _$;');
+    is($p->convert(sub {my $v = $_ foreach @h}), 'var _$ = [[1, 2], [3, 4]];for (var i = 0, _ = _$[0]; i < _$.length; _ = _$[++i]) var v = _;delete _$;');
+    is($p->convert(sub {my $v = $_ foreach ([1,2], [3,4])}), 'var _$ = [[1, 2], [3, 4]];for (var i = 0, _ = _$[0]; i < _$.length; _ = _$[++i]) var v = _;delete _$;');
     is($p->convert(sub {my $v = $a if $a}), 'if ( 42) var v = 42;');
     is($p->convert(sub {while ($a) { my $v = $b}}), 'while (42) {var v = "foo";}');
 }
