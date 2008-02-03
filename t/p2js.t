@@ -1,4 +1,4 @@
-use Test::More tests => 68;
+use Test::More tests => 70;
 
 BEGIN { use_ok('IWL::P2JS'); push @INC, "./t"; }
 use Foo;
@@ -63,6 +63,7 @@ sub test_lexical {
     is($p->convert(sub {my $v = $g->printJS}), 'var v = "Hello JS.";');
     is($p->convert(sub {my $v = $g->overloaded}), 'var v = 1;');
     is($p->convert(sub {my $v = $g->printArgs(qw(abs 12 42f))}), 'var v = "abs, 12, 42f";');
+    is($p->convert(sub {my $v = $g->dumpArgs({a => 1}, 42)}), 'var v = "[{\'a\' => 1},42]";');
     is($p->convert(sub {my $v = $g->this->overloaded}), 'var v = 1;');
     is($p->convert(sub {my $v = $g->{prop1}}), 'var v = 42;');
     is($p->convert(sub {my $v = $g->this->{prop1}}), 'var v = 42;');
@@ -71,6 +72,7 @@ sub test_lexical {
     is($p->convert(sub {my $v = Foo::printJS}), 'var v = "Hello JS.";');
     is($p->convert(sub {my $v = Foo->printArgs(qw(abs 12 42f))}), 'var v = "abs, 12, 42f";');
     is($p->convert(sub {my $v = Foo::printArgs($a, $b, 'abs')}), 'var v = "42, foo, abs";');
+    is($p->convert(sub {my $v = Foo->printArgs($a, $b, 'abs')}), 'var v = "42, foo, abs";');
     is($p->convert(sub {my $v = $_ foreach 1 .. $a}), 'for (var _ = 1; _ < 43; ++_) var v = _;');
     is($p->convert(sub {my $v = $_ foreach @c}), 'var _$ = [1, 2, 3];for (var i = 0, _ = _$[0]; i < _$.length; _ = _$[++i]) var v = _;delete _$;');
     is($p->convert(sub {my $v = $a if $a}), 'if ( 42) var v = 42;');
@@ -97,6 +99,8 @@ sub test_real {
     is($p->convert(sub {document::signalConnect('dom:ready' => sub { S('main_container')->hide })}), q|document.signalConnect('dom:ready', function() {$('main_container').hide();});|);
     my $path = '/foo/bar/';
     is($p->convert(sub {my $css = {background => "url(${path}perl.jpg) no-repeat"}}), q|var css = {"background": "url(" + "/foo/bar/" + "perl.jpg) no-repeat"};|);
+    is($p->convert(sub {Effect::Morph->new($this, {afterFinish => $this->{writeAttribute}->bind($this, {src => '/skin/images/perl2.jpg'})})}),
+        q|new Effect.Morph(this, {"afterFinish": this.writeAttribute.bind(this, {"src": "/skin/images/perl2.jpg"})});|);
 }
 
 sub test_overrides {
@@ -107,4 +111,4 @@ sub test_overrides {
 test_general;
 test_lexical;
 test_real;
-test_overrides;
+#test_overrides;

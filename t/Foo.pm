@@ -4,6 +4,8 @@ package Foo;
 
 use strict;
 
+use Data::Dumper;
+
 sub new {bless {prop1 => 42, prop2 => Bar->new}, shift}
 sub printJS {
     return "Hello JS.";
@@ -18,6 +20,13 @@ sub this {
 sub printArgs {
     shift if ref $_[0] eq __PACKAGE__ || $_[0] eq __PACKAGE__;
     return join ', ', @_;
+}
+
+sub dumpArgs {
+    shift if ref $_[0] eq __PACKAGE__ || $_[0] eq __PACKAGE__;
+    $Data::Dumper::Terse = 1;
+    $Data::Dumper::Indent = 0;
+    return Dumper (\@_);
 }
 
 package Bar;

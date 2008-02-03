@@ -17,7 +17,6 @@ use vars qw($VERSION @EXPORT $this $arguments);
 # export $this for JavaScript
 @EXPORT = qw($this $arguments);
 
-my $ignore_json = 0;
 my $number  = qr/^-?\d+(?:\.\d+)?(?:e[-+]\d+)?$/;
 my $escapes = qr/[\x00-\x1f\\"]/;
 my %special = ("\b" => '\b', "\t" => '\t', "\n" => '\n', "\f" => '\f', "\r" => '\r', "\\" => '\\\\', '"' => '\"');
@@ -179,7 +178,7 @@ sub __parseSimpleStatement {
         if ($child->isa('PPI::Structure::List')) {
             $self->__parseStructureList($child);
         } elsif ($child->isa('PPI::Structure::Constructor')) {
-            my $token = PPI::Token->new($self->__toJS($self->__getConstructor($child, 1)));
+            my $token = PPI::Token->new($self->__getConstructor($child, 1));
             $child->insert_before($token) and $child->delete;
         } elsif ($child->isa('PPI::Token::Word')) {
             $self->__parseWord($child);
@@ -240,7 +239,7 @@ sub __parseCompoundStatement {
                 if ($operators && @$operators % 2 && (!$last->isa('PPI::Token::Structure') || $last->content ne ';')) {
                     my $clone = $child->clone;
                     bless $clone, 'PPI::Structure::Constructor';
-                    my $result = PPI::Token->new($self->__toJS($self->__getConstructor($clone)));
+                    my $result = PPI::Token->new($self->__getConstructor($clone));
                     $child->insert_before($result) && $child->delete;
                     next;
                 }
@@ -499,7 +498,13 @@ sub __getExpressionValue {
             my $method = $start->content;
             my $coderef = ref $ret ? $ret : $self->__getPackageAvailability($ret, $method);
             if ($coderef) {
-                my @args = $self->__getArguments($start->snext_sibling);
+                my $list = $start->snext_sibling;
+                my @args;
+                if (ref $list && $list->isa('PPI::Structure::List')) {
+                    map {$self->__parseTokenSymbol($_)} @{$list->find('Token::Symbol') || []};
+                    @args = eval $list->content;
+                    $list->delete;
+                }
                 $ret = $ret->$method(@args);
             } else {
                 my @args = $self->__getArguments($start->snext_sibling, 1);
@@ -541,9 +546,7 @@ sub __getObjectExpression {
             my @args = $self->__getArguments($start->snext_sibling, 1);
             $ret = join '.', split '::', $ret;
             $ret = ($method eq 'new' ? ('new ' . $ret) : ($ret . '.' . $method))
-              . '(' . (join ', ', map {
-                ref $_ ? $self->__toJS($_) : $_
-              } @args) . ')';
+              . '(' . (join ', ', @args) . ')';
         } elsif ($start->isa('PPI::Structure::Subscript') && $start->start->content eq '{') {
             my $property = $start->schild(0);
             $property = $property->schild(0) if $property->isa('PPI::Statement');
@@ -570,8 +573,13 @@ sub __getObjectExpression {
 sub __getFunctionValue {
     my ($self, $element, $coderef) = @_;
     my $list = $element->snext_sibling;
-
-    return $self->__toJS($coderef->($self->__getArguments($list)));
+    my @args;
+    if (ref $list && $list->isa('PPI::Structure::List')) {
+        map {$self->__parseTokenSymbol($_)} @{$list->find('Token::Symbol') || []};
+        @args = eval $list->content;
+        $list->delete;
+    }
+    return $self->__toJS($coderef->(@args));
 }
 
 # Returns a list of arguments, which are to be passed to a function/method
@@ -581,7 +589,6 @@ sub __getArguments {
     my ($element, @args) = $list->children ? $list->schild(0)->schild(0) : ();
     $list->delete and return () unless $element;
 
-    $ignore_json = 1;
     do {{
         next if $element->isa('PPI::Token::Operator');
         if ($element->isa('PPI::Token::Symbol')) {
@@ -591,11 +598,12 @@ sub __getArguments {
             push @args, $keep_strings ? $element->content : $element->string;
         } elsif ($element->isa('PPI::Structure::Constructor') || $element->isa('PPI::Structure::Block')) {
             push @args, $self->__getConstructor($element);
+        } elsif ($element->isa('PPI::Token::Cast') && $element->content  eq '$') {
+            next;
         } else {
             push @args, $element->content;
         }
     }} while ($element = $element->snext_sibling);
-    $ignore_json = 0;
 
     $list->delete;
     return @args;
@@ -606,7 +614,7 @@ sub __getConstructor {
     my ($self, $constructor, $preserve) = @_;
     return unless defined $constructor && ($constructor->isa('PPI::Structure::Constructor') || $constructor->isa('PPI::Structure::Block'));
     my ($element, @args) = $constructor->children ? $constructor->schild(0)->schild(0) : ();
-    my ($hash, $add) = ($constructor->start->content eq '{', 0);
+    my ($hash, $add, $even) = ($constructor->start->content eq '{', 0, 0);
     ($preserve || $constructor->delete) and return $hash ? {} : [] unless $element;
 
     do {{
@@ -616,11 +624,13 @@ sub __getConstructor {
         }
         if ($element->isa('PPI::Token::Symbol')) {
             $self->__parseTokenSymbol($element);
-            $add ? $args[$#args] = $args[$#args] . ' ' . $element->content : push @args, $element->content;
+            $add ? $args[$#args]->add(' ' . $element->content) : push @args, _JS_LITERAL->new($element->content);
         } elsif ($element->isa('PPI::Token::Quote')) {
-            $add ? $args[$#args] = $args[$#args] . ' "' . $element->string . '"' : push @args, '"' . $element->string . '"';
+            $add ? $args[$#args]->add(' "' . $element->string . '"') : push @args, _JS_LITERAL->new('"' . $element->string . '"');
         } elsif ($element->isa('PPI::Structure::Constructor')) {
-            $add ? $args[$#args] = $args[$#args] . ' ' . $self->__getConstructor($element, 1) : push @args, $self->__getConstructor($element, 1);
+            $add
+              ? $args[$#args]->add(' ' . $self->__getConstructor($element, 1))
+              : push @args, _JS_LITERAL->new($self->__getConstructor($element, 1));
         } elsif ($element->isa('PPI::Token::Word')) {
             my $snext = $element->snext_sibling;
             my $ret = '';
@@ -630,15 +640,18 @@ sub __getConstructor {
                 $ret = $snext->content;
                 $snext->delete;
             }
-            $add ? $args[$#args] = $args[$#args] . ' ' . $element->content . $ret : push @args, $element->content . $ret;
+            $add ? $args[$#args]->add(' ' . $element->content . $ret) : push @args, _JS_LITERAL->new($element->content . $ret);
+        } elsif ($element->isa('PPI::Token::Cast') && $element->content  eq '$') {
+            next;
         } else {
-            $add ? $args[$#args] = $args[$#args] . ' ' . $element->content : push @args, $element->content;
+            $add ? $args[$#args]->add(' ' . $element->content) : push @args, _JS_LITERAL->new($element->content);
         }
         $add = 1;
     }} while ($element = $element->snext_sibling);
 
     $constructor->delete unless $preserve;
-    return $hash ? ${\{@args}} : \@args;
+    @args = map {($even = !$even) ? $self->__toJS($_) : $_} @args;
+    return $self->__toJS($hash ? ${\{@args}} : \@args);
 }
 
 # Returns the package glob reference if the package is available (if it has any methods)
@@ -696,14 +709,14 @@ sub __toJS {
 
     unless ($ref) {
         return $data if $data =~ $number
-          || $self->{__currentDocument}{__variables}{$data}
-          || $data =~ /(?:\|\||&&|-|\+|=)/o;                    # Expression
-        do { $data =~ s/^"//; $data =~ s/"$// } unless $ignore_json;
+          || $self->{__currentDocument}{__variables}{$data};
+        $data =~ s/^"//;
+        $data =~ s/"$//;
         $data =~ s/($escapes)/
           my $ret = $special{$1} || '\\u00' . unpack('H2', $1);
           $ret;
         /eg;
-        return $ignore_json ? $data : qq{"$data"};
+        return qq{"$data"};
     }
     if ($ref eq 'ARRAY') {
         my @results;
@@ -728,7 +741,35 @@ sub __toJS {
         my $copy = $$data;
         return $self->__toJS($copy);
     }
+    if ($ref eq '_JS_LITERAL') {
+        return $data->get;
+    }
     return;
+}
+
+=head1 _JS_LITERAL
+
+_JS_LITERAL is an internal class, which is used to I<mark> literal JavaScript strings
+
+=cut
+
+package _JS_LITERAL;
+
+sub new {
+    my ($proto, $content) = @_;
+    my $class = ref $proto || $proto;
+    return bless { content => $content || '' }, $class;
+}
+
+sub add {
+    my ($self, $content) = @_;
+    $self->{content} .= $content;
+    return $self;
+}
+
+sub get {
+    my $self = shift;
+    return $self->{content};
 }
 
 1;
