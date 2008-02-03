@@ -609,7 +609,6 @@ sub __getConstructor {
     my ($hash, $add) = ($constructor->start->content eq '{', 0);
     ($preserve || $constructor->delete) and return $hash ? {} : [] unless $element;
 
-    $ignore_json = 1;
     do {{
         if ($element->isa('PPI::Token::Operator') && $element->content eq ',') {
             $add = 0;
@@ -619,7 +618,7 @@ sub __getConstructor {
             $self->__parseTokenSymbol($element);
             $add ? $args[$#args] = $args[$#args] . ' ' . $element->content : push @args, $element->content;
         } elsif ($element->isa('PPI::Token::Quote')) {
-            $add ? $args[$#args] = $args[$#args] . ' ' . $element->string : push @args, $element->string;
+            $add ? $args[$#args] = $args[$#args] . ' "' . $element->string . '"' : push @args, '"' . $element->string . '"';
         } elsif ($element->isa('PPI::Structure::Constructor')) {
             $add ? $args[$#args] = $args[$#args] . ' ' . $self->__getConstructor($element, 1) : push @args, $self->__getConstructor($element, 1);
         } elsif ($element->isa('PPI::Token::Word')) {
@@ -637,7 +636,6 @@ sub __getConstructor {
         }
         $add = 1;
     }} while ($element = $element->snext_sibling);
-    $ignore_json = 0;
 
     $constructor->delete unless $preserve;
     return $hash ? ${\{@args}} : \@args;
@@ -700,6 +698,7 @@ sub __toJS {
         return $data if $data =~ $number
           || $self->{__currentDocument}{__variables}{$data}
           || $data =~ /(?:\|\||&&|-|\+|=)/o;                    # Expression
+        do { $data =~ s/^"//; $data =~ s/"$// } unless $ignore_json;
         $data =~ s/($escapes)/
           my $ret = $special{$1} || '\\u00' . unpack('H2', $1);
           $ret;
@@ -720,7 +719,8 @@ sub __toJS {
         my %hash = %$data;
         foreach my $key (keys %hash) {
             my $value = $self->__toJS($hash{$key});
-            push @results, (qq{"$key"} . ': ' . $value) if defined $value;
+            $key = qq{"$key"} unless substr($key, 0, 1) eq '"' && substr($key, -1) eq '"';
+            push @results, ($key . ': ' . $value) if defined $value;
         }
         return '{' . (join ", ", @results) . '}';
     }

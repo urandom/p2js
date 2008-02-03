@@ -1,4 +1,4 @@
-use Test::More tests => 66;
+use Test::More tests => 68;
 
 BEGIN { use_ok('IWL::P2JS'); push @INC, "./t"; }
 use Foo;
@@ -25,7 +25,8 @@ sub test_general {
     is($p->convert(sub {my $a = 12; window->alert($a)}), "var a = 12;window.alert(a);");
     is($p->convert(sub {my $a = 12; alert($a)}), "var a = 12;alert(a);");
     is($p->convert(sub {my $a = 12; Math::max($a, 5)}), "var a = 12;Math.max(a, 5);");
-    is($p->convert(sub {my $url = 'foo.pl'; my $ajax = Ajax::Request->new($url, {parameters => {a => 1}, array => [1, 'foo']}); $ajax->abort}), q|var url = 'foo.pl';var ajax = new Ajax.Request(url, {"parameters": {"a": 1}, "array": [1, "foo"]});ajax.abort();|);
+    is($p->convert(sub {my $url = 'foo.pl'; my $ajax = Ajax::Request->new($url, {parameters => {a => 1}}); $ajax->abort}), q|var url = 'foo.pl';var ajax = new Ajax.Request(url, {"parameters": {"a": 1}});ajax.abort();|);
+    is($p->convert(sub {my $url = 'foo.pl'; my $ajax = Ajax::Request->new($url, {array => [1, 'foo']}); $ajax->abort}), q|var url = 'foo.pl';var ajax = new Ajax.Request(url, {"array": [1, "foo"]});ajax.abort();|);
     is($p->convert(sub {my $foo = "document"->getElementById('foo')->down()->next(2)->down('.class'); $foo->remove();}), q|var foo = document.getElementById('foo').down().next(2).down('.class');foo.remove();|);
     is($p->convert(sub {my $foo = document::getElementById('foo')->down()->next(2)->down('.class'); $foo->remove();}), q|var foo = document.getElementById('foo').down().next(2).down('.class');foo.remove();|);
     is($p->convert(sub {S('foo')->down}), q|$('foo').down();|);
@@ -94,6 +95,8 @@ sub test_real {
     is($p->convert(sub {my $container = S('main_container')->positionAtCenter;$container->setStyle({visibility => 'visible', display => 'none'});$container->appear->shake;}),
         q|var container = $('main_container').positionAtCenter();container.setStyle({"visibility": "visible", "display": "none"});container.appear().shake();|);
     is($p->convert(sub {document::signalConnect('dom:ready' => sub { S('main_container')->hide })}), q|document.signalConnect('dom:ready', function() {$('main_container').hide();});|);
+    my $path = '/foo/bar/';
+    is($p->convert(sub {my $css = {background => "url(${path}perl.jpg) no-repeat"}}), q|var css = {"background": "url(" + "/foo/bar/" + "perl.jpg) no-repeat"};|);
 }
 
 sub test_overrides {
