@@ -1,4 +1,4 @@
-use Test::More tests => 74;
+use Test::More tests => 75;
 
 BEGIN { use_ok('IWL::P2JS'); push @INC, "./t"; }
 use Foo;
@@ -106,6 +106,8 @@ sub test_real {
     is($p->convert(sub {my $css = {background => "url(${path}perl.jpg) no-repeat"}}), q|var css = {"background": "url(" + "/foo/bar/" + "perl.jpg) no-repeat"};|);
     is($p->convert(sub {Effect::Morph->new($this, {afterFinish => $this->{writeAttribute}->bind($this, {src => '/skin/images/perl2.jpg'})})}),
         q|new Effect.Morph(this, {"afterFinish": this.writeAttribute.bind(this, {"src": "/skin/images/perl2.jpg"})});|);
+    is($p->convert(sub {$this->signalConnect(click => (sub {$this->{__value} = $arguments[0]})->bind($this, 1))}),
+        q|this.signalConnect('click', function() {this.__value = arguments[0];}.bind(this, 1));|);
 }
 
 sub test_overrides {

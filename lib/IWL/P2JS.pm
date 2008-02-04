@@ -176,11 +176,11 @@ sub __parseStatement {
     return $js unless $statement->isa('PPI::Statement');
 
     $self->__parseSimpleStatement($statement)
-      if $ref eq 'PPI::Statement' || $ref eq 'PPI::Statement::Variable';
+      if $ref eq 'PPI::Statement' || $ref eq 'PPI::Statement::Variable' || $ref eq 'PPI::Statement::Expression';
     $self->__parseCompoundStatement($statement)
       if $ref eq 'PPI::Statement::Compound';
 
-    return;
+    return $statement;
 }
 
 sub __parseSimpleStatement {
@@ -200,6 +200,7 @@ sub __parseSimpleStatement {
             # Subroutine block
             $self->__parseStatement($_) foreach $child->schildren;
         } elsif ($child->isa('PPI::Token::Quote')
+                 && $child->snext_sibling
                  && $child->snext_sibling->isa('PPI::Token::Operator')
                  && $child->snext_sibling->content eq '->') {
             $child->set_content($self->__getExpressionValue($child, $child->string));
@@ -265,7 +266,7 @@ sub __parseCompoundStatement {
 
 sub __parseTokenSymbol {
     my ($self, $token) = @_;
-    return unless $token->isa('PPI::Token::Symbol') && !$token->{__value};
+    return unless $token->isa('PPI::Token::Symbol') && !$token->{__parsed};
     my $sigil = $token->symbol_type;
     my $content = $token->content;
     my $name = substr $content, 1;
@@ -302,6 +303,7 @@ sub __parseTokenSymbol {
             : $name;
         $token->set_content($pad_value);
     }
+    $token->{__parsed} = 1;
     return $self;
 }
 
@@ -526,12 +528,10 @@ sub __getExpressionValue {
                 }
                 $ret = $ret->$method(@args);
             } else {
-                my @args = $self->__getArguments($start->snext_sibling, 1);
+                my $args = $self->__getArguments($start->snext_sibling);
                 $ret = join '.', split '::', $ret;
                 $ret = ($method eq 'new' ? ('new ' . $ret) : ($ret . '.' . $method))
-                  . '(' . (join ', ', map {
-                    ref $_ ? $self->__toJS($_) : $_
-                  } @args) . ')';
+                  . '(' . $args . ')';
                 $string = 1;
             }
         } elsif ($start->isa('PPI::Structure::Subscript') && $start->start->content eq '{') {
@@ -562,10 +562,10 @@ sub __getObjectExpression {
             $start = $start->snext_sibling and next;
         } elsif ($start->isa('PPI::Token::Word') && $sprev->isa('PPI::Token::Operator')) {
             my $method = $start->content;
-            my @args = $self->__getArguments($start->snext_sibling, 1);
+            my $args = $self->__getArguments($start->snext_sibling);
             $ret = join '.', split '::', $ret;
             $ret = ($method eq 'new' ? ('new ' . $ret) : ($ret . '.' . $method))
-              . '(' . (join ', ', @args) . ')';
+              . '(' . $args . ')';
         } elsif ($start->isa('PPI::Structure::Subscript') && $start->start->content eq '{') {
             my $property = $start->schild(0);
             $property = $property->schild(0) if $property->isa('PPI::Statement');
@@ -603,29 +603,16 @@ sub __getFunctionValue {
 
 # Returns a list of arguments, which are to be passed to a function/method
 sub __getArguments {
-    my ($self, $list, $keep_strings) = @_;
-    return () unless $list->isa('PPI::Structure::List');
+    my ($self, $list) = @_;
+    return '' unless $list->isa('PPI::Structure::List');
     my ($element, @args) = $list->children ? $list->schild(0)->schild(0) : ();
-    $list->delete and return () unless $element;
+    $list->delete and return '' unless $element;
+    $self->__parseStatement($list->schild(0));
 
-    do {{
-        next if $element->isa('PPI::Token::Operator');
-        if ($element->isa('PPI::Token::Symbol')) {
-            $self->__parseTokenSymbol($element);
-            push @args, $element->content;
-        } elsif ($element->isa('PPI::Token::Quote')) {
-            push @args, $keep_strings ? $element->content : $element->string;
-        } elsif ($element->isa('PPI::Structure::Constructor') || $element->isa('PPI::Structure::Block')) {
-            push @args, $self->__getConstructor($element);
-        } elsif ($element->isa('PPI::Token::Cast') && $element->content  eq '$') {
-            next;
-        } else {
-            push @args, $element->content;
-        }
-    }} while ($element = $element->snext_sibling);
+    my $content = substr($list->content, 1, length($list->content) - 2);
 
     $list->delete;
-    return @args;
+    return $content;
 }
 
 # Returns the contents of an anonymous hash/array
