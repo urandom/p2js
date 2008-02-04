@@ -60,20 +60,23 @@ sub __connect {
 
 # IWL::Script
 #
+no warnings qw(redefine);
 
 sub __iwlScriptInit {
     my $self = shift;
     return if $overridden{"IWL::Script"};
 
-    my $setScript = *IWL::Script::setScript{CODE};
+    no strict 'refs';
+    foreach my $method (qw(set append prepend)) {
+        my $original = *{"IWL::Script::${method}Script"}{CODE};
 
-    no warnings qw(redefine);
-    *IWL::Script::setScript = sub {
-        my ($self_, $param) = @_;
-        @_ = ($self_, ref $param eq 'CODE' ? $self->{p2js}->convert($param) : $param);
+        *{"IWL::Script::${method}Script"} = sub {
+            my ($self_, $param) = @_;
+            @_ = ($self_, ref $param eq 'CODE' ? $self->{p2js}->convert($param) : $param);
 
-        goto $setScript;
-    };
+            goto $original;
+        };
+    }
 
     $overridden{"IWL::Script"} = 1;
 }
