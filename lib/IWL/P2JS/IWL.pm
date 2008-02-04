@@ -60,7 +60,7 @@ sub __connect {
 sub __iwlScriptInit {
     my $self = shift;
 
-    my $setScript = *{IWL::Script::setScript}{CODE};
+    my $setScript = *IWL::Script::setScript{CODE};
 
     no warnings qw(redefine);
     *IWL::Script::setScript = sub {
