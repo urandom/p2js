@@ -38,12 +38,22 @@ IWL::P2JS has basic plugin support. To load a plugin, it must be added to the I<
 
 =head1 CONSTRUCTOR
 
-IWL::P2JS->new
+IWL::P2JS->new (B<%OPTIONS>)
+
+The following options are recognized:
+
+=over 4
+
+=item B<globalScope>
+
+If true, the resulting code will not be encapsulated into an anonymous function. Depending on the usage of the code, all the variables will be available from the I<window> namespace. Defaults to I<''>.
+
+=back
 
 =cut
 
 sub new {
-    my ($proto) = @_;
+    my ($proto, %options) = @_;
     my $class = ref($proto) || $proto;
     my $self = bless {}, $class;
 
@@ -51,6 +61,9 @@ sub new {
 
     $IWLConfig{P2JS_PLUGINS} = 'IWL::P2JS::Prototype,IWL::P2JS::IWL' unless $IWLConfig{P2JS_PLUGINS};
     do { eval "require $_"; $_->new($self) unless $@ } foreach split ',', $IWLConfig{P2JS_PLUGINS};
+
+    $self->{_options} = {};
+    $self->{_options}{globalScope} = !(!$options{globalScope}) if defined $options{globalScope};
 
     return $self;
 }
@@ -80,7 +93,8 @@ sub convert {
     }
 
     $self->{__pad} = $self->__walker($subref);
-    return $self->__parser(join "", @perl);
+    my $js = $self->__parser(join "", @perl);
+    return $self->{_options}{globalScope} ? $js : "(function () {" . $js . "})()";
 }
 
 =item B<signalConnect> (B<SIGNAL>, B<CALLBACK>)

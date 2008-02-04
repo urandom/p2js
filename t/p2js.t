@@ -3,7 +3,7 @@ use Test::More tests => 73;
 BEGIN { use_ok('IWL::P2JS'); push @INC, "./t"; }
 use Foo;
 
-my $p = IWL::P2JS->new;
+my $p = IWL::P2JS->new(globalScope => 1);
 
 sub test_general {
     is($p->convert(sub {}), '');
