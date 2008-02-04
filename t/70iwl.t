@@ -5,7 +5,7 @@ use strict;
 my $p = IWL::P2JS->new(globalScope => 1);
 
 sub test_overrides {
-    use IWL::Script;
+    require IWL::Script;
     like(IWL::Script->new->setScript(sub {return 1})->getContent, qr|<script .*?>return 1;</script>|);
     like(IWL::Script->new->setScript("return 1;")->getContent, qr|<script .*?>return 1;</script>|);
 }
