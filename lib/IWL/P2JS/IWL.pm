@@ -32,7 +32,7 @@ sub new {
 # Internal
 #
 my %monitors = qw(IWL/Script.pm 1);
-my %overwridden = (requires => 1);
+my %overwridden;
 
 sub __inspectInc {
     my $self = shift;
