@@ -1,4 +1,4 @@
-use Test::More tests => 76;
+use Test::More tests => 68;
 
 BEGIN { use_ok('IWL::P2JS'); push @INC, "./t"; }
 use Foo;
@@ -29,8 +29,6 @@ sub test_general {
     is($p->convert(sub {my $url = 'foo.pl'; my $ajax = Ajax::Request->new($url, {array => [1, 'foo']}); $ajax->abort}), q|var url = 'foo.pl';var ajax = new Ajax.Request(url, {"array": [1, "foo"]});ajax.abort();|);
     is($p->convert(sub {my $foo = "document"->getElementById('foo')->down()->next(2)->down('.class'); $foo->remove();}), q|var foo = document.getElementById('foo').down().next(2).down('.class');foo.remove();|);
     is($p->convert(sub {my $foo = document::getElementById('foo')->down()->next(2)->down('.class'); $foo->remove();}), q|var foo = document.getElementById('foo').down().next(2).down('.class');foo.remove();|);
-    is($p->convert(sub {S('foo')->down}), q|$('foo').down();|);
-    is($p->convert(sub {SS('#foo')->down}), q|$$('#foo').down();|);
 
     is($p->convert(sub {my $a = 12; if ($a) {my $b = $a / 2}}), "var a = 12;if (a) {var b = a / 2;}");
     is($p->convert(sub {my $a = 12; unless ($a) {my $b = $a / 2}}), "var a = 12;if (!(a)) {var b = a / 2;}");
@@ -85,23 +83,14 @@ sub test_lexical {
 }
 
 sub test_real {
-    is($p->convert(sub {
-        my $content = S('content')->down();
-        $params->{codeFor} = $content->{id} if $content;
-    }), q|var content = $('content').down();if ( content) params.codeFor = content.id;|);
     is($p->convert(sub {IWL::Status::display('Stock button loaded')}), "IWL.Status.display('Stock button loaded');");
     is($p->convert(sub {IWL::Status::display->bind($this, 'Completed')}), "IWL.Status.display.bind(this, 'Completed');");
-    is($p->convert(sub {{text => SF('image_entry_text') || 0}}), q{{"text": $F('image_entry_text') || 0}});
     my $message = "five";
     is($p->convert(sub {IWL::Status::display("Icon $message was selected")}), "IWL.Status.display('Icon ' + \"five\" + ' was selected');");
     is($p->convert(sub {IWL::Status::display("Don't panic")}), "IWL.Status.display('Don\\'t panic');");
-    is($p->convert(sub {S($this)->isPulsating ? $this->setPulsate(0) : $this->setPulsate(1)}), '$(this).isPulsating() ? this.setPulsate(0) : this.setPulsate(1);');
     is($p->convert(sub {IWL::Status::display($this->getLabel . ' selected.')}), "IWL.Status.display(this.getLabel() + ' selected.');");
     is($p->convert(sub {IWL::Status::display($arguments->[0]{data}{text})}), "IWL.Status.display(arguments[0].data.text);");
     my $container = Foo->new;
-    is($p->convert(sub {my $container = S('main_container')->positionAtCenter;$container->setStyle({visibility => 'visible', display => 'none'});$container->appear->shake;}),
-        q|var container = $('main_container').positionAtCenter();container.setStyle({"visibility": "visible", "display": "none"});container.appear().shake();|);
-    is($p->convert(sub {document::signalConnect('dom:ready' => sub { S('main_container')->hide })}), q|document.signalConnect('dom:ready', function() {$('main_container').hide();});|);
     my $path = '/foo/bar/';
     is($p->convert(sub {my $css = {background => "url(${path}perl.jpg) no-repeat"}}), q|var css = {"background": "url(" + "/foo/bar/" + "perl.jpg) no-repeat"};|);
     is($p->convert(sub {Effect::Morph->new($this, {afterFinish => $this->{writeAttribute}->bind($this, {src => '/skin/images/perl2.jpg'})})}),
@@ -110,12 +99,6 @@ sub test_real {
         q|this.signalConnect('click', function() {this.__value = arguments[0];}.bind(this, 1));|);
 }
 
-sub test_overrides {
-    require IWL::Script;
-    like(IWL::Script->new->setScript(sub {return 1})->getContent, qr|<script .*?>return 1;</script>|);
-}
-
 test_general;
 test_lexical;
 test_real;
-test_overrides;

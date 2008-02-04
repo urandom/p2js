@@ -15,5 +15,7 @@ inc/Module/Install/WriteAll.pm
 lib/IWL/P2JS.pm
 lib/IWL/P2JS/Prototype.pm
 lib/IWL/P2JS/IWL.pm
-t/p2js.t
+t/10p2js.t
+t/50prototype.t
+t/70iwl.t
 t/Foo.pm
