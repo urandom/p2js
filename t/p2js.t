@@ -1,4 +1,4 @@
-use Test::More tests => 75;
+use Test::More tests => 76;
 
 BEGIN { use_ok('IWL::P2JS'); push @INC, "./t"; }
 use Foo;
@@ -118,4 +118,4 @@ sub test_overrides {
 test_general;
 test_lexical;
 test_real;
-#test_overrides;
+test_overrides;
