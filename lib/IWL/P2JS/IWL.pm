@@ -38,11 +38,12 @@ sub __inspectInc {
     my $self = shift;
     do { $self->__connect($_) if $INC{$_} } foreach keys %monitors;
 
-    *CORE::GLOBAL::require = sub {
-        CORE::require($_[0]);
-        warn "$_[0]\n";
-        $self->__connect($_[0]) if $monitors{$_[0]};
-    } unless $overridden{require};
+    BEGIN {
+        *CORE::GLOBAL::require = sub {
+            CORE::require($_[0]);
+            $self->__connect($_[0]) if $monitors{$_[0]};
+        } unless $overridden{require};
+    }
     $overridden{require} = 1;
 
     return $self;
