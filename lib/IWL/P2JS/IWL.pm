@@ -32,17 +32,18 @@ sub new {
 # Internal
 #
 my %monitors = qw(IWL/Script.pm 1);
-my %overwridden;
+my %overridden;
 
 sub __inspectInc {
     my $self = shift;
     do { $self->__connect($_) if $INC{$_} } foreach keys %monitors;
 
     *CORE::GLOBAL::require = sub {
-        CORE::require(@_);
+        CORE::require($_[0]);
+        warn "$_[0]\n";
         $self->__connect($_[0]) if $monitors{$_[0]};
     } unless $overridden{require};
-    $overwridden{require} = 1;
+    $overridden{require} = 1;
 
     return $self;
 }
@@ -61,7 +62,7 @@ sub __connect {
 
 sub __iwlScriptInit {
     my $self = shift;
-    return if $overwridden{IWL::Script};
+    return if $overridden{"IWL::Script"};
 
     my $setScript = *IWL::Script::setScript{CODE};
 
@@ -71,9 +72,9 @@ sub __iwlScriptInit {
         @_ = ($self_, ref $param eq 'CODE' ? $self->{p2js}->convert($param) : $param);
 
         goto $setScript;
-    }
+    };
 
-    $overridden{IWL::Script} = 1;
+    $overridden{"IWL::Script"} = 1;
 }
 
 1;

@@ -1,8 +1,8 @@
-use Test::More tests => 7;
+use Test::More tests => 8;
 use IWL::P2JS;
 use strict;
 
-BEGIN { push @INC, "./t"; }
+BEGIN { use_ok('IWL::P2JS::Prototype'); push @INC, "./t"; }
 use Foo;
 
 my $p = IWL::P2JS->new(globalScope => 1);

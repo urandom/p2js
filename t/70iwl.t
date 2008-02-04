@@ -1,6 +1,8 @@
-use Test::More tests => 2;
+use Test::More tests => 3;
 use IWL::P2JS;
 use strict;
+
+BEGIN { use_ok('IWL::P2JS::IWL'); }
 
 my $p = IWL::P2JS->new(globalScope => 1);
 
