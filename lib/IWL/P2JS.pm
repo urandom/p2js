@@ -173,14 +173,14 @@ sub __parseStatement {
     my ($self, $statement) = @_;
     my ($ref, $js) = (ref $statement, '');
 
-    return $js unless $statement->isa('PPI::Statement');
+    return unless $statement->isa('PPI::Statement');
 
     $self->__parseSimpleStatement($statement)
       if $ref eq 'PPI::Statement' || $ref eq 'PPI::Statement::Variable' || $ref eq 'PPI::Statement::Expression';
     $self->__parseCompoundStatement($statement)
       if $ref eq 'PPI::Statement::Compound';
 
-    return $statement;
+    return $self;
 }
 
 sub __parseSimpleStatement {
@@ -196,9 +196,6 @@ sub __parseSimpleStatement {
             $child->insert_before($token) and $child->delete;
         } elsif ($child->isa('PPI::Token::Word')) {
             $self->__parseWord($child);
-        } elsif ($child->isa('PPI::Structure::Block')) {
-            # Subroutine block
-            $self->__parseStatement($_) foreach $child->schildren;
         } elsif ($child->isa('PPI::Token::Quote')
                  && $child->snext_sibling
                  && $child->snext_sibling->isa('PPI::Token::Operator')
@@ -437,10 +434,7 @@ sub __parseStructureList {
     my $sprev    = $child->sprevious_sibling;
     my @children = $child->children ? $child->schild(0)->schildren : ();
 
-    do {
-        $self->__parseTokenSymbol($_);
-        $self->__parseWord($_);
-    } foreach @children;
+    $self->__parseStatement($_) foreach $child->schildren;
     
     if ($sprev->isa('PPI::Token::Word') && $sprev->content eq 'var') {
         my $whitespace = PPI::Token::Whitespace->new;
