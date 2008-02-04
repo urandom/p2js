@@ -7,7 +7,6 @@ use strict;
 
 use B::Deparse;
 use PPI::Document;
-use Text::Balanced 'extract_bracketed';
 use Scalar::Util qw(blessed);
 use base qw(Exporter);
 
@@ -266,7 +265,7 @@ sub __parseCompoundStatement {
 
 sub __parseTokenSymbol {
     my ($self, $token) = @_;
-    return unless $token->isa('PPI::Token::Symbol');
+    return unless $token->isa('PPI::Token::Symbol') && !$token->{__value};
     my $sigil = $token->symbol_type;
     my $content = $token->content;
     my $name = substr $content, 1;
@@ -384,6 +383,13 @@ sub __parseForLoop {
         my $operator = $s->find_first('Token::Operator');
         my $content = PPI::Token->new;
         $operator = $operator ? $operator->content : '';
+        # Parsed lexical array variables always have []. They are redundant here.
+        $s->find(sub {
+            if ($_[1]->isa('PPI::Token::Symbol') && $_[1]->raw_type eq '@') {
+                $self->__parseTokenSymbol($_[1]);
+                $_[1]->set_content(substr($_[1]->content, 1, length($_[1]->content) - 2)) if $_[1]->{__value};
+            }
+        });
         $self->__parseStatement($s);
         my $expr = $s->content;
 
@@ -403,7 +409,7 @@ sub __parseForLoop {
             my $st = PPI::Statement->new;
 
             # For statement-modifier for-loop
-            $expr = '[' . $expr . ']' if (extract_bracketed($expr, '[]'))[1];
+            $expr = '[' . $expr . ']';
 
             $array->set_content('var _$ = ' . $expr . ';');
             $st->add_element($array);
