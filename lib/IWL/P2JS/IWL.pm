@@ -96,7 +96,10 @@ sub __iwlWidgetInit {
 
         *{"IWL::Widget::signal${method}"} = sub {
             my ($self_, $signal, $callback) = @_;
+            my $globalScope = $self->{p2js}{_options}{globalScope};
+            $self->{p2js}{_options}{globalScope} = 1;
             @_ = ($self_, $signal, ref $callback eq 'CODE' ? $self->{p2js}->convert($callback) : $callback);
+            $self->{p2js}{_options}{globalScope} = $globalScope;
 
             goto $original;
         };
