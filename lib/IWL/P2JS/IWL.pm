@@ -31,7 +31,7 @@ sub new {
 
 # Internal
 #
-my %monitors = qw(IWL/Script.pm 1);
+my %monitors = qw(IWL/Script.pm 1 IWL/Widget.pm 1);
 my %overridden;
 
 sub __inspectInc {
@@ -41,7 +41,8 @@ sub __inspectInc {
     BEGIN {
         *CORE::GLOBAL::require = sub {
             CORE::require($_[0]);
-            $self->__connect($_[0]) if $monitors{$_[0]};
+            $self->__connect($_[0]) if $self && $monitors{$_[0]};
+            return 1;
         } unless $overridden{require};
     }
     $overridden{require} = 1;
@@ -54,6 +55,8 @@ sub __connect {
 
     if ($filename eq 'IWL/Script.pm') {
         $self->__iwlScriptInit;
+    } elsif ($filename eq 'IWL/Widget.pm') {
+        $self->__iwlWidgetInit;
     }
     return $self;
 }
@@ -79,6 +82,27 @@ sub __iwlScriptInit {
     }
 
     $overridden{"IWL::Script"} = 1;
+}
+
+# IWL::Widget
+#
+sub __iwlWidgetInit {
+    my $self = shift;
+    return if $overridden{"IWL::Widget"};
+
+    no strict 'refs';
+    foreach my $method (qw(Connect Disconnect)) {
+        my $original = *{"IWL::Widget::signal${method}"}{CODE};
+
+        *{"IWL::Widget::signal${method}"} = sub {
+            my ($self_, $signal, $callback) = @_;
+            @_ = ($self_, $signal, ref $callback eq 'CODE' ? $self->{p2js}->convert($callback) : $callback);
+
+            goto $original;
+        };
+    }
+
+    $overridden{"IWL::Widget"} = 1;
 }
 
 1;
