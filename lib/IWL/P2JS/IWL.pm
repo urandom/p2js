@@ -198,9 +198,7 @@ sub __iwlWidgetInit {
     my $deleteStyle = *IWL::Widget::deleteStyle{CODE};
     *IWL::Widget::deleteStyle = sub {
         my ($self_, $style) = @_;
-        return _JS_LITERAL->new(<<JS) if $self->__callerP2JS;
-readAttribute('style').split(';').map(function(_) { if (/$style/.test(_)) _ = ''; return _;}).join(';')
-JS
+        return _JS_LITERAL->new(qq|setStyle({"$style": ""})|) if $self->__callerP2JS;
 
         goto $deleteStyle;
     };

@@ -41,7 +41,7 @@ sub test_variable {
     like($c1->signalConnect(click => sub {$c1->appendClass('foo')->appendChild($c2)->firstChild})->getContent, qr|<div.*?onclick="\$\(&#39;c1&#39;\).addClassName\(&#39;foo&#39;\).appendChild\(null\).down\(\);".*?></div>|);
     $c1->signalDisconnect;
     like($c1->signalConnect(click => sub {$c1->setStyle(display => 'none')->deleteStyle('visibility')->remove})->getContent,
-        qr|<div.*?onclick="\$\(&#39;c1&#39;\).setStyle\(\{&quot;display&quot;: &quot;none&quot;\}\)\.readAttribute\(&#39;style&#39;\)\.split\(&#39;;&#39;\)\.map\(function\(_\) { if \(/visibility/\.test\(_\)\) _ = &#39;&#39;; return _;}\).join\(&#39;;&#39;\)\n\.remove\(\);".*?></div>|);
+        qr|<div.*?onclick="\$\(&#39;c1&#39;\).setStyle\(\{&quot;display&quot;: &quot;none&quot;\}\)\.setStyle\(\{&quot;visibility&quot;: &quot;&quot;\}\)\.remove\(\);".*?></div>|);
 }
 
 test_script;
