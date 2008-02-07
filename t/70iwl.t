@@ -1,4 +1,4 @@
-use Test::More tests => 12;
+use Test::More tests => 17;
 use IWL::P2JS;
 use strict;
 
@@ -29,5 +29,21 @@ sub test_widget {
     is($widget->signalDisconnect('click')->getContent, qq|<></>\n|);
 }
 
+sub test_variable {
+    use IWL::Container;
+    my $c1 = IWL::Container->new(id => 'c1');
+    my $c2 = IWL::Container->new;
+    like($c2->signalConnect(click => sub {$c2->remove})->getContent, qr|<div.*?onclick="null.remove\(\);".*?></div>|);
+    like($c1->signalConnect(click => sub {$c1->remove})->getContent, qr|<div.*?onclick="\$\(&#39;c1&#39;\).remove\(\);".*?></div>|);
+    $c1->signalDisconnect;
+    like($c1->signalConnect(click => sub {$c1->appendClass('foo')})->getContent, qr|<div.*?onclick="\$\(&#39;c1&#39;\).addClassName\(&#39;foo&#39;\);".*?></div>|);
+    $c1->signalDisconnect;
+    like($c1->signalConnect(click => sub {$c1->appendClass('foo')->appendChild($c2)->firstChild})->getContent, qr|<div.*?onclick="\$\(&#39;c1&#39;\).addClassName\(&#39;foo&#39;\).appendChild\(null\).down\(\);".*?></div>|);
+    $c1->signalDisconnect;
+    like($c1->signalConnect(click => sub {$c1->setStyle(display => 'none')->deleteStyle('visibility')->remove})->getContent,
+        qr|<div.*?onclick="\$\(&#39;c1&#39;\).setStyle\(\{&quot;display&quot;: &quot;none&quot;\}\)\.readAttribute\(&#39;style&#39;\)\.split\(&#39;;&#39;\)\.map\(function\(_\) { if \(/visibility/\.test\(_\)\) _ = &#39;&#39;; return _;}\).join\(&#39;;&#39;\)\n\.remove\(\);".*?></div>|);
+}
+
 test_script;
 test_widget;
+test_variable;

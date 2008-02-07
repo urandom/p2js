@@ -5,6 +5,8 @@ package IWL::P2JS::IWL;
 
 use strict;
 
+use IWL::JSON 'toJSON';
+
 =head1 NAME
 
 IWL::P2JS::IWL - a plugin for P2JS to handle IWL specific tasks
@@ -26,6 +28,7 @@ sub new {
     my $class = ref($proto) || $proto;
     my $self = bless {p2js => $converter}, $class;
 
+    $self->__connect;
     return $self->__inspectInc;
 }
 
@@ -33,24 +36,43 @@ sub new {
 #
 my %monitors = qw(IWL/Script.pm 1 IWL/Widget.pm 1);
 my %overridden;
+my %translations = (
+    firstChild      => 'down',
+    lastChild       => 1,
+    getChildren     => 'childElements',
+    nextSibling     => 'next',
+    prevSibling     => 'previous',
+    getParent       => 'up',
+    appendChild     => 1,
+    setAttribute    => 'writeAttribute',
+    setAttributes   => 'writeAttribute',
+    getAttribute    => 'readAttribute',
+    hasAttribute    => 1,
+    deleteAttribute => 'removeAttribute',
+    getStyle        => 'getStyle',
+    appendClass     => 'addClassName',
+    prependClass    => 'addClassName',
+    hasClass        => 'hasClassName',
+    removeClass     => 'removeClassName',
+);
 
 sub __inspectInc {
     my $self = shift;
-    do { $self->__connect($_) if $INC{$_} } foreach keys %monitors;
+    do { $self->__override($_) if $INC{$_} } foreach keys %monitors;
 
     BEGIN {
         *CORE::GLOBAL::require = sub {
             CORE::require($_[0]);
-            $self->__connect($_[0]) if $self && $monitors{$_[0]};
+            $self->__override($_[0]) if $self && $monitors{$_[0]};
             return 1;
         } unless $overridden{require};
     }
-    $overridden{require} = 1;
+    $overridden{require} = [1];
 
     return $self;
 }
 
-sub __connect {
+sub __override {
     my ($self, $filename) = @_;
 
     if ($filename eq 'IWL/Script.pm') {
@@ -59,6 +81,66 @@ sub __connect {
         $self->__iwlWidgetInit;
     }
     return $self;
+}
+
+sub __isOverridden {
+    my ($self, $ref, $method) = @_;
+    foreach my $class (grep {$ref->isa($_)} keys %overridden) {
+        return 1 if grep { $_ eq $method } @{$overridden{$class}};
+    }
+}
+
+sub __connect {
+    my $self = shift;
+    $self->{p2js}->signalConnect('blessed_expression', sub {
+        my ($element, $value) = @_;
+        return $element unless $value->isa('IWL::Widget');
+        my $snext = $element->snext_sibling;
+        my $method = $snext && $snext->isa('PPI::Token::Operator') && $snext->content eq '->'
+          ? $snext->snext_sibling->content
+          : undef;
+        my $id = $value->getId;
+        $element->set_content('null') and return unless $id;
+        if ($method && !exists $translations{$method} && !$self->__isOverridden($value, $method)) {
+            my $coderef = $self->{p2js}->_getPackageAvailability($value, $method);
+            return $element if $coderef;
+        }
+        $element->{__iwlElement} = 1;
+        $element->{_reference} = $value;
+        $element->set_content("\$('$id')");
+        return;
+    });
+
+    $self->{p2js}->signalConnect('token_word', sub {
+        my $element = shift;
+        my $iterator = $element;
+        my $ok = 0;
+        do {{
+            last if $iterator->isa('PPI::Token::Operator') && $iterator->content ne '.';
+            $ok = 1 if $iterator->{__iwlElement};
+        }} while $iterator = $iterator->sprevious_sibling;
+        return $element unless $ok;
+
+        my $content = $element->content;
+        my $method = $translations{$content};
+        if ($method) {
+            $method = $content if $method eq '1';
+            $element->set_content($method);
+        }
+        return $element;
+    });
+
+    return $self;
+}
+
+sub __callerP2JS {
+    my $self = shift;
+
+    my $stack = 0;
+    while (my @stack = caller($stack++)) {
+        return 1 if $stack[0] eq 'IWL::P2JS';
+    }
+    return;
 }
 
 # IWL::Script
@@ -81,7 +163,7 @@ sub __iwlScriptInit {
         };
     }
 
-    $overridden{"IWL::Script"} = 1;
+    $overridden{"IWL::Script"} = [qw(setScript appendScript prependScript)];
 }
 
 # IWL::Widget
@@ -105,7 +187,25 @@ sub __iwlWidgetInit {
         };
     }
 
-    $overridden{"IWL::Widget"} = 1;
+    my $setStyle = *IWL::Widget::setStyle{CODE};
+    *IWL::Widget::setStyle = sub {
+        my ($self_, %style) = @_;
+        return _JS_LITERAL->new('setStyle(' . toJSON(\%style) . ')') if $self->__callerP2JS;
+
+        goto $setStyle;
+    };
+
+    my $deleteStyle = *IWL::Widget::deleteStyle{CODE};
+    *IWL::Widget::deleteStyle = sub {
+        my ($self_, $style) = @_;
+        return _JS_LITERAL->new(<<JS) if $self->__callerP2JS;
+readAttribute('style').split(';').map(function(_) { if (/$style/.test(_)) _ = ''; return _;}).join(';')
+JS
+
+        goto $deleteStyle;
+    };
+
+    $overridden{"IWL::Widget"} = [qw(signalConnect signalDisconnect setStyle deleteStyle)];
 }
 
 1;

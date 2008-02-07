@@ -42,11 +42,12 @@ my $token_word = sub {
     return $element->set_content('$F') if $element->content eq 'SF';
     return $element->set_content('$H') if $element->content eq 'SH';
     return $element->set_content('$R') if $element->content eq 'SR';
+    return $element;
 };
 
 sub __connect {
     my $self = shift;
-    $self->{p2js}->signalConnect('Token::Word', $token_word);
+    $self->{p2js}->signalConnect('token_word', $token_word);
 
     return $self;
 }
