@@ -34,7 +34,7 @@ sub new {
 
 # Internal
 #
-my %monitors = qw(IWL/Script.pm 1 IWL/Widget.pm 1);
+my @monitors = qw(IWL/Object IWL/Script IWL/Widget);
 my %overridden;
 my %translations = (
     firstChild      => 'down',
@@ -49,21 +49,24 @@ my %translations = (
     getAttribute    => 'readAttribute',
     hasAttribute    => 1,
     deleteAttribute => 'removeAttribute',
+
     getStyle        => 'getStyle',
     appendClass     => 'addClassName',
     prependClass    => 'addClassName',
     hasClass        => 'hasClassName',
     removeClass     => 'removeClassName',
+
+    isDisabled      => 'isNotEnabled',
 );
 
 sub __inspectInc {
     my $self = shift;
-    do { $self->__override($_) if $INC{$_} } foreach keys %monitors;
+    do { $self->__override($_ . '.pm') if $INC{$_ . '.pm'} } foreach @monitors;
 
     BEGIN {
         *CORE::GLOBAL::require = sub {
             CORE::require($_[0]);
-            $self->__override($_[0]) if $self && $monitors{$_[0]};
+            $self->__override($_[0]) if $self && grep {$_[0] eq $_ . '.pm'} @monitors;
             return 1;
         } unless $overridden{require};
     }
@@ -74,12 +77,9 @@ sub __inspectInc {
 
 sub __override {
     my ($self, $filename) = @_;
+    my $method = '__iwl' . (join '', split '/', substr $filename, 4, -3) . 'Init';
 
-    if ($filename eq 'IWL/Script.pm') {
-        $self->__iwlScriptInit;
-    } elsif ($filename eq 'IWL/Widget.pm') {
-        $self->__iwlWidgetInit;
-    }
+    $self->$method;
     return $self;
 }
 
@@ -105,8 +105,7 @@ sub __connect {
             my $coderef = $self->{p2js}->_getPackageAvailability($value, $method);
             return $element if $coderef;
         }
-        $element->{__iwlElement} = 1;
-        $element->{_reference} = $value;
+        $element->{__iwlElement} = $self->{_inhibit} = 1;
         $element->set_content("\$('$id')");
         return;
     });
@@ -143,9 +142,63 @@ sub __callerP2JS {
     return;
 }
 
+no warnings qw(redefine);
+# IWL::Object
+#
+sub __iwlObjectInit {
+    my $self = shift;
+    return if $overridden{"IWL::Object"};
+
+    my $nextChild = *IWL::Object::nextChild{CODE};
+    *IWL::Object::nextChild = sub {
+        my ($self_, $reference) = @_;
+        if ($self->__callerP2JS) {
+            my $id = $reference->getAttribute('id');
+            return _JS_LITERAL->new("down('#$id').next()") if $id;
+        }
+
+        goto $nextChild;
+    };
+
+    my $prevChild = *IWL::Object::prevChild{CODE};
+    *IWL::Object::prevChild = sub {
+        my ($self_, $reference) = @_;
+        if ($self->__callerP2JS) {
+            my $id = $reference->getAttribute('id');
+            return _JS_LITERAL->new("down('#$id').previous()") if $id;
+        }
+
+        goto $prevChild;
+    };
+
+    my $prependChild = *IWL::Object::prependChild{CODE};
+    *IWL::Object::prependChild = sub {
+        my ($self_, $reference) = @_;
+        if ($self->__callerP2JS) {
+            my $parent = $self_->getAttribute('id');
+            my $id = $reference->getAttribute('id');
+            return _JS_LITERAL->new("insertBefore(\$('$id'), \$('$parent').firstChild)") if $id;
+        }
+
+        goto $prependChild;
+    };
+
+    my $setChild = *IWL::Object::setChild{CODE};
+    *IWL::Object::setChild = sub {
+        my ($self_, $reference) = @_;
+        if ($self->__callerP2JS) {
+            my $id = $reference->getAttribute('id');
+            return _JS_LITERAL->new("update().appendChild(\$('$id'))") if $id;
+        }
+
+        goto $setChild;
+    };
+
+    $overridden{"IWL::Object"} = [qw(nextChild prevChild prependChild setChild)];
+}
+
 # IWL::Script
 #
-no warnings qw(redefine);
 
 sub __iwlScriptInit {
     my $self = shift;

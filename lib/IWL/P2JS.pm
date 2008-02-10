@@ -292,8 +292,9 @@ sub _parseTokenSymbol {
                 my $value = $self->{__pad}{$token->content}{value};
                 $token->{__value} = 1;
                 if (ref $value eq 'REF' && blessed $$value) {
+                    $token->{_reference} = $$value;
                     if ($self->_emitSignal('blessed_expression', $token, $$value)) {
-                        $self->_getExpressionValue($token, $$value) ;
+                        $self->_getExpressionValue($token, $$value) or $name;
                     } else {
                         $token->content;
                     }
@@ -343,7 +344,7 @@ sub _parseWord {
         my $sprev = $child->sprevious_sibling;
         if ($sprev && $sprev->isa('PPI::Token::Operator') && $sprev->content eq '.') {
             $sprev = $sprev->sprevious_sibling;
-            $child->{_reference} = $sprev->{_reference} if $sprev->{_reference};
+            $child->{_reference} = $sprev->{_reference} if $sprev->{_reference} && !$child->{_reference};
         }
 
         my @composition = split /::/, $child->content;
@@ -507,12 +508,13 @@ sub _parseStructureList {
 # Get the object expression ($example->method()[->method2()...], $$example{foo}{bar}, or Example->method())
 sub _getExpressionValue {
     my ($self, $element, $value) = @_;
-    my ($start, $ret, $sprev, $string, $ref) = ($element->snext_sibling, $value, $element->sprevious_sibling, 0, $element->{_reference});
+    my ($start, $ret, $sprev, $string, $ref) = ($element->snext_sibling, $value, $element->sprevious_sibling, 0, $element->{_reference} || $value);
 
+    return unless $start;
     $sprev->delete if $sprev && $sprev->isa('PPI::Token::Cast') && $sprev->content eq '$';
     while (1) {
         $sprev = $start->sprevious_sibling;
-        if ($ref) {
+        if ($element->{_inhibit}) {
             $ret .= $sprev->content;
             return $string ? $ret : $self->_toJS($ret) unless blessed $ref;
         }
@@ -522,20 +524,18 @@ sub _getExpressionValue {
             $start = $start->snext_sibling and next;
         } elsif ($start->isa('PPI::Token::Word') && $sprev->isa('PPI::Token::Operator')) {
             my $method = $start->content;
-            my $coderef = $self->_getPackageAvailability($ret, $method);
+            my $coderef = $self->_getPackageAvailability($ref, $method);
             if ($coderef) {
                 my $list = $start->snext_sibling;
                 my @args;
                 if (ref $list && $list->isa('PPI::Structure::List')) {
                     map {$self->_parseTokenSymbol($_)} @{$list->find('Token::Symbol') || []};
-                    @args = eval $list->content;
+                    push @args, map {$_->{_reference} || $_->{_inhibit} || eval $_} grep {!$_->isa('PPI::Token::Operator')} $_->schildren
+                      foreach $list->schildren;
                     $list->delete;
                 }
-                if ($ref) {
-                    $ref = $ref->$method(@args);
-                } else {
-                    $ret = $ret->$method(@args);
-                }
+                $ref = $ref->$method(@args);
+                $ret = $ref unless $element->{_inhibit};
             } else {
                 my $args = $self->_getArguments($start->snext_sibling);
                 $ret = join '.', split '::', $ret;
@@ -604,7 +604,8 @@ sub _getFunctionValue {
     my @args;
     if (ref $list && $list->isa('PPI::Structure::List')) {
         map {$self->_parseTokenSymbol($_)} @{$list->find('Token::Symbol') || []};
-        @args = eval $list->content;
+        push @args, map {$_->{_reference} || $_->{_inhibit} || eval $_} grep {!$_->isa('PPI::Token::Operator')} $_->schildren
+          foreach $list->schildren;
         $list->delete;
     }
     unshift @args, $package if blessed $package;

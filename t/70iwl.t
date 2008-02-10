@@ -1,10 +1,24 @@
-use Test::More tests => 17;
+use Test::More tests => 22;
 use IWL::P2JS;
 use strict;
 
 BEGIN { use_ok('IWL::P2JS::IWL'); }
 
 my $p = IWL::P2JS->new;
+
+sub test_object {
+    require IWL::Widget;
+    my $parent = IWL::Widget->new(id => 'parent');
+    my $child1 = IWL::Widget->new(id => 'child1');
+    my $child2 = IWL::Widget->new(id => 'child2');
+    $parent->appendChild($child1, $child2);
+
+    is($p->convert(sub {$parent->nextChild($child1);}), q|(function () {$('parent').down('#child1').next();})()|);
+    is($p->convert(sub {$parent->prevChild($child2);}), q|(function () {$('parent').down('#child2').previous();})()|);
+    is($parent->prevChild($child2), $child1);
+    is($p->convert(sub {$parent->prependChild($child2, $child1);}), q|(function () {$('parent').insertBefore($('child2'), $('parent').firstChild);})()|);
+    is($p->convert(sub {$parent->setChild($child2);}), q|(function () {$('parent').update().appendChild($('child2'));})()|);
+}
 
 sub test_script {
     require IWL::Script;
@@ -18,7 +32,6 @@ sub test_script {
 }
 
 sub test_widget {
-    use IWL::Widget;
     my $widget = IWL::Widget->new;
     is($widget->signalConnect(click => sub {return 0})->getContent, qq|< onclick="return 0;"></>\n|);
     is($widget->signalConnect(click => "return false;")->getContent, qq|< onclick="return 0;return false;"></>\n|);
@@ -44,6 +57,7 @@ sub test_variable {
         qr|<div.*?onclick="\$\(&#39;c1&#39;\).setStyle\(\{&quot;display&quot;: &quot;none&quot;\}\)\.setStyle\(\{&quot;visibility&quot;: &quot;&quot;\}\)\.remove\(\);".*?></div>|);
 }
 
+test_object;
 test_script;
 test_widget;
 test_variable;
