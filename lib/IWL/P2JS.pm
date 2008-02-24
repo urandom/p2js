@@ -797,7 +797,8 @@ sub get {
     return $self->{content};
 }
 
-1;
+# Initialize one object, to start the plugins
+IWL::P2JS->new;
 
 =head1 AUTHOR
 
