@@ -363,7 +363,14 @@ sub _parseWord {
     ) {
         return $self unless $self->_emitSignal('token_word', $child);
         # Method without arguments
-        $child->insert_after(PPI::Token->new('()'));
+        my $sprev = $child->sprevious_sibling->sprevious_sibling;
+        $child->{_reference} = $sprev->{_reference} if $sprev && $sprev->{_reference} && !$child->{_reference};
+        my $coderef = $self->_getPackageAvailability($child->{_reference}, $child->content);
+        if ($coderef) {
+            $child->set_content($self->_getFunctionValue($child, $child->{_reference}, $coderef));
+        } else {
+            $child->insert_after(PPI::Token->new('()'));
+        }
     } elsif ($child->content eq 'function') {
         # Subroutines
         my $snext = $child->snext_sibling;
@@ -679,6 +686,7 @@ sub _getPackageAvailability {
         return $package->can($function);
     }
 
+    return unless $package;
     $mainref = $mainref->{$_ . '::'} or last foreach split /::/, $package;
     return unless $mainref;
 

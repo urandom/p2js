@@ -34,30 +34,42 @@ sub new {
 
 # Internal
 #
-my @monitors = qw(IWL/Object IWL/Script IWL/Widget);
-my %overridden;
-my %translations = (
-    firstChild      => 'down',
-    lastChild       => 1,
-    getChildren     => 'childElements',
-    nextSibling     => 'next',
-    prevSibling     => 'previous',
-    getParent       => 'up',
-    appendChild     => 1,
-    setAttribute    => 'writeAttribute',
-    setAttributes   => 'writeAttribute',
-    getAttribute    => 'readAttribute',
-    hasAttribute    => 1,
-    deleteAttribute => 'removeAttribute',
+use vars qw(@monitors %overridden %translated %translations %classTranslations);
+BEGIN {
+    @monitors = qw(IWL/Object IWL/Script IWL/Widget);
+    %translations = (
+        firstChild      => 'down',
+        lastChild       => 1,
+        getChildren     => 'childElements',
+        nextSibling     => 'next',
+        prevSibling     => 'previous',
+        getParent       => 'up',
+        appendChild     => 1,
+        setAttribute    => 'writeAttribute',
+        setAttributes   => 'writeAttribute',
+        getAttribute    => 'readAttribute',
+        hasAttribute    => 1,
+        deleteAttribute => 'removeAttribute',
 
-    getStyle        => 'getStyle',
-    appendClass     => 'addClassName',
-    prependClass    => 'addClassName',
-    hasClass        => 'hasClassName',
-    removeClass     => 'removeClassName',
+        getStyle        => 'getStyle',
+        appendClass     => 'addClassName',
+        prependClass    => 'addClassName',
+        hasClass        => 'hasClassName',
+        removeClass     => 'removeClassName',
 
-    isDisabled      => 'isNotEnabled',
-);
+        isDisabled      => 'isNotEnabled',
+    );
+    %classTranslations = (
+        "IWL::Widget" => {
+            setId => ['writeAttribute', [id => 'shift']],
+            getId => ['readAttribute', ["id"]],
+            setName => ['writeAttribute', [name => 'shift']],
+            getName => ['readAttribute', ["name"]],
+            setTitle => ['writeAttribute', [title => 'shift']],
+            getTitle => ['readAttribute', ["title"]],
+        },
+    );
+}
 
 sub __inspectInc {
     my $self = shift;
@@ -67,6 +79,8 @@ sub __inspectInc {
         *CORE::GLOBAL::require = sub {
             CORE::require($_[0]);
             $self->__override($_[0]) if $self && grep {$_[0] eq $_ . '.pm'} @monitors;
+            my $class = join '::', split '/', substr($_[0], 0, -3);
+            $self->__translate($class) if $self && $classTranslations{$class};
             return 1;
         } unless $overridden{require};
     }
@@ -88,6 +102,9 @@ sub __isOverridden {
     foreach my $class (grep {$ref->isa($_)} keys %overridden) {
         return 1 if grep { $_ eq $method } @{$overridden{$class}};
     }
+    foreach my $class (grep {$ref->isa($_)} keys %translated) {
+        return 1 if grep { $_ eq $method } @{$translated{$class}};
+    }
 }
 
 sub __connect {
@@ -99,7 +116,7 @@ sub __connect {
         my $method = $snext && $snext->isa('PPI::Token::Operator') && $snext->content eq '->'
           ? $snext->snext_sibling->content
           : undef;
-        my $id = $value->getId;
+        my $id = $value->getAttribute('id');
         $element->set_content('null') and return unless $id;
         if ($method && !exists $translations{$method} && !$self->__isOverridden($value, $method)) {
             my $coderef = $self->{p2js}->_getPackageAvailability($value, $method);
@@ -133,7 +150,7 @@ sub __connect {
 }
 
 sub __callerP2JS {
-    my $self = shift;
+    my ($self) = @_;
 
     my $stack = 0;
     while (my @stack = caller($stack++)) {
@@ -143,11 +160,37 @@ sub __callerP2JS {
 }
 
 no warnings qw(redefine);
+
+sub __translate {
+    my ($self, $class) = @_;
+    return if $translated{$class};
+    no strict 'refs';
+    my %methods = %{$classTranslations{$class}};
+    while (my ($method, $translation) = each %methods) {
+        my $original = *{$class . "::" . $method}{CODE};
+
+        *{$class . "::" . $method} = sub {
+            my $self_ = shift;
+            if ($self->__callerP2JS) {
+                do {$_ = shift if $_ eq 'shift'} foreach @{$translation->[1]};
+                return _JS_LITERAL->new($translation->[0] . '(' . substr(toJSON($translation->[1]), 1, -1) . ')');
+            }
+
+            unshift @_, $self_;
+
+            goto $original;
+        };
+    }
+
+    $translated{$class} = [keys %methods];
+}
+
 # IWL::Object
 #
 sub __iwlObjectInit {
     my $self = shift;
-    return if $overridden{"IWL::Object"};
+    my $class = "IWL::Object";
+    return if $overridden{$class};
 
     my $nextChild = *IWL::Object::nextChild{CODE};
     *IWL::Object::nextChild = sub {
@@ -194,7 +237,7 @@ sub __iwlObjectInit {
         goto $setChild;
     };
 
-    $overridden{"IWL::Object"} = [qw(nextChild prevChild prependChild setChild)];
+    $overridden{$class} = [qw(nextChild prevChild prependChild setChild)];
 }
 
 # IWL::Script
@@ -223,7 +266,8 @@ sub __iwlScriptInit {
 #
 sub __iwlWidgetInit {
     my $self = shift;
-    return if $overridden{"IWL::Widget"};
+    my $class = "IWL::Widget";
+    return if $overridden{$class};
 
     no strict 'refs';
     foreach my $method (qw(Connect Disconnect)) {
@@ -256,7 +300,7 @@ sub __iwlWidgetInit {
         goto $deleteStyle;
     };
 
-    $overridden{"IWL::Widget"} = [qw(signalConnect signalDisconnect setStyle deleteStyle)];
+    $overridden{$class} = [qw(signalConnect signalDisconnect setStyle deleteStyle)];
 }
 
 1;

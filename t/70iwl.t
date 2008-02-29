@@ -1,4 +1,4 @@
-use Test::More tests => 22;
+use Test::More tests => 34;
 use IWL::P2JS;
 use strict;
 
@@ -40,6 +40,20 @@ sub test_widget {
     is($widget->signalDisconnect(click => sub { return 3 })->getContent, qq|< onclick="return 0;return false;return 2;"></>\n|);
     is($widget->signalDisconnect(click => 'return false;')->getContent, qq|< onclick="return 0;return 2;"></>\n|);
     is($widget->signalDisconnect('click')->getContent, qq|<></>\n|);
+    is($widget->setId('bar')->getContent, qq|< id="bar"></>\n|);
+    is($p->convert(sub {$widget->setId('foo');}), q|(function () {$('bar').writeAttribute("id", "foo");})()|);
+    is($widget->getId, "bar");
+    is($p->convert(sub {$widget->getId;}), q|(function () {$('bar').readAttribute("id");})()|);
+
+    like($widget->setName('bar')->getContent, qr|name="bar"|);
+    is($p->convert(sub {$widget->setName('foo');}), q|(function () {$('bar').writeAttribute("name", "foo");})()|);
+    is($widget->getName, "bar");
+    is($p->convert(sub {$widget->getName;}), q|(function () {$('bar').readAttribute("name");})()|);
+
+    like($widget->setTitle('bar')->getContent, qr|title="bar"|);
+    is($p->convert(sub {$widget->setTitle('foo');}), q|(function () {$('bar').writeAttribute("title", "foo");})()|);
+    is($widget->getTitle, "bar");
+    is($p->convert(sub {$widget->getTitle;}), q|(function () {$('bar').readAttribute("title");})()|);
 }
 
 sub test_variable {
