@@ -1,14 +1,9 @@
-IWL version 0.52
+IWL-P2JS version 0.01
 ================
 
-The IWL includes several widgets with which consistent web pages can be built
-quickly. The structure resembles the DOM tree, with the API mimicking
-Javascript very closely.  The widgets themselves can be used either as
-standalone object in an already existing scripts, or can be used to build new
-scripts from the grounds up. They can be finalized in both HTML markup, and
-JSON notation, which can be used for scripts. More advanced widgets like the
-Iconbox come with Javascript files which are automatically included when the
-widget is finalized as HTML.
+The IWL-P2JS library is an attempt to translate simple perl code references
+into JavaScript. This can help people with no prior JavaScript experience to
+fully utilize IWL
 
 INSTALLATION
 
@@ -19,18 +14,12 @@ To install this module type the following:
    make test
    make install
 
-In order to actually use the library, the javascript and css files will also
-have to be installed in the server's document root. To do that, the
-'iwl-install' script is provided. It is usually located in '/usr/bin'
-
 DEPENDENCIES
 
 This module requires these other modules and libraries:
 
-  Scalar::Util
-  Locale::Messages
-  Locale::TextDomain
-  HTML::Parser
+ IWL
+ PPI
 
 COPYRIGHT AND LICENCE
 
